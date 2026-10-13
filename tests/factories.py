@@ -6,10 +6,9 @@ from datetime import datetime
 from decimal import Decimal
 
 import factory
-from factory import Factory, SubFactory, Sequence, Faker, post_generation
-from factory.fuzzy import FuzzyChoice
+from factory import Factory, SubFactory, Sequence, post_generation
 
-from service.models import Order, Item
+from service.models import Order, OrderItem
 
 
 class OrderFactory(Factory):
@@ -23,15 +22,14 @@ class OrderFactory(Factory):
     id = Sequence(lambda n: n)
     customer_id = Sequence(lambda n: n + 1000)
     order_date = factory.LazyFunction(datetime.now)
-    status = FuzzyChoice(choices=["created", "processing", "completed", "cancelled"])
+    status = "pending"
     total_amount = factory.LazyFunction(lambda: Decimal("59.99"))
 
-    # The many side of relationships can be a little wonky in factory boy
     @post_generation
     def items(
         self, create, extracted, **kwargs
     ):  # pylint: disable=method-hidden, unused-argument
-        """Creates the items list"""
+        """Creates the OrderItems list"""
         if not create:
             return
 
@@ -39,17 +37,17 @@ class OrderFactory(Factory):
             self.items = extracted
 
 
-class ItemFactory(Factory):
-    """Creates fake Order Items"""
+class OrderItemFactory(Factory):
+    """Creates fake OrderItems"""
 
     class Meta:  # pylint: disable=too-few-public-methods
-        """Maps factory to Item model"""
+        """Maps factory to OrderItem model"""
 
-        model = Item
+        model = OrderItem
 
     id = Sequence(lambda n: n)
     order_id = None
     product_id = Sequence(lambda n: n + 2000)
-    quantity = Faker("random_int", min=1, max=10)
+    quantity = factory.Faker("random_int", min=1, max=10)
     price = factory.LazyFunction(lambda: Decimal("19.99"))
     order = SubFactory(OrderFactory)

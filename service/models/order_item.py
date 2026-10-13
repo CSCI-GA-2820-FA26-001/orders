@@ -1,7 +1,7 @@
 """
-Item Model
+OrderItem Model
 
-An Item represents a product contained in an Order.
+An OrderItem represents a product contained in an Order.
 """
 
 from decimal import Decimal, InvalidOperation
@@ -10,14 +10,14 @@ from .persistent_base import db, PersistentBase, DataValidationError
 
 
 ######################################################################
-#  I T E M   M O D E L
+#  O R D E R   I T E M   M O D E L
 ######################################################################
-class Item(db.Model, PersistentBase):
+class OrderItem(db.Model, PersistentBase):
     """
-    Class that represents an Item
+    Class that represents an OrderItem
     """
 
-    __tablename__ = "items"
+    __tablename__ = "order_items"
 
     # Table Schema
     id = db.Column(db.Integer, primary_key=True)
@@ -32,12 +32,12 @@ class Item(db.Model, PersistentBase):
 
     def __repr__(self):
         return (
-            f"<Item product_id={self.product_id} "
+            f"<OrderItem product_id={self.product_id} "
             f"id=[{self.id}] order=[{self.order_id}]>"
         )
 
     def serialize(self) -> dict:
-        """Converts an Item into a dictionary"""
+        """Converts an OrderItem into a dictionary"""
         return {
             "id": self.id,
             "order_id": self.order_id,
@@ -48,10 +48,10 @@ class Item(db.Model, PersistentBase):
 
     def deserialize(self, data: dict) -> None:
         """
-        Populates an Item from a dictionary
+        Populates an OrderItem from a dictionary
 
         Args:
-            data (dict): A dictionary containing the item data
+            data (dict): A dictionary containing the OrderItem data
         """
         try:
             self.order_id = data["order_id"]
@@ -64,10 +64,11 @@ class Item(db.Model, PersistentBase):
 
         except KeyError as error:
             raise DataValidationError(
-                "Invalid Item: missing " + error.args[0]
+                "Invalid OrderItem: missing " + error.args[0]
             ) from error
 
         except (TypeError, ValueError, InvalidOperation) as error:
             raise DataValidationError(
-                "Invalid Item: body of request contained bad or no data " + str(error)
+                "Invalid OrderItem: body of request contained bad or no data "
+                + str(error)
             ) from error

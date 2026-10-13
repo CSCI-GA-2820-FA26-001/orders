@@ -15,7 +15,7 @@
 ######################################################################
 
 """
-Test cases for Order and Item Models
+Test cases for Order and OrderItem Models
 """
 
 # pylint: disable=duplicate-code
@@ -27,16 +27,17 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from wsgi import app
-from service.models import Order, Item, DataValidationError, db
-from .factories import OrderFactory, ItemFactory
+from service.models import Order, OrderItem, DataValidationError, db
+from .factories import OrderFactory, OrderItemFactory
 
 DATABASE_URI = os.getenv(
-    "DATABASE_URI", "postgresql+psycopg://postgres:postgres@localhost:5432/testdb"
+    "DATABASE_URI",
+    "postgresql+psycopg://postgres:postgres@localhost:5432/testdb",
 )
 
 
 ######################################################################
-#  Order   M O D E L   T E S T   C A S E S
+#  O R D E R   M O D E L   T E S T   C A S E S
 ######################################################################
 # pylint: disable=too-many-public-methods
 class TestOrderModel(TestCase):
@@ -58,7 +59,7 @@ class TestOrderModel(TestCase):
 
     def setUp(self):
         """This runs before each test"""
-        db.session.query(Item).delete()
+        db.session.query(OrderItem).delete()
         db.session.query(Order).delete()
         db.session.commit()
 
@@ -77,16 +78,28 @@ class TestOrderModel(TestCase):
         order = Order(
             customer_id=123,
             order_date=order_date,
-            status="created",
+            status="pending",
             total_amount=Decimal("59.99"),
         )
 
         self.assertIsNotNone(order)
-        self.assertIsNone(order.id)
+        self.assertIsNone(order.order_id)
         self.assertEqual(order.customer_id, 123)
         self.assertEqual(order.order_date, order_date)
-        self.assertEqual(order.status, "created")
+        self.assertEqual(order.status, "pending")
         self.assertEqual(order.total_amount, Decimal("59.99"))
+
+    def test_order_default_status(self):
+        """It should default a new Order status to pending"""
+        order = Order(
+            customer_id=123,
+            order_date=datetime.now(),
+            total_amount=Decimal("59.99"),
+        )
+
+        order.create()
+
+        self.assertEqual(order.status, "pending")
 
     def test_add_an_order(self):
         """It should create an Order and add it to the database"""
@@ -96,8 +109,8 @@ class TestOrderModel(TestCase):
         order = OrderFactory()
         order.create()
 
-        # Assert that it was assigned an id
-        self.assertIsNotNone(order.id)
+        # Assert that it was assigned an order_id
+        self.assertIsNotNone(order.order_id)
 
         # Assert that it shows up in the database
         orders = Order.all()
@@ -108,11 +121,11 @@ class TestOrderModel(TestCase):
         order = OrderFactory()
         order.create()
 
-        # Read it back
-        found_order = Order.find(order.id)
+        # Read it back by order_id
+        found_order = Order.find_by_order_id(order.order_id)
 
         self.assertIsNotNone(found_order)
-        self.assertEqual(found_order.id, order.id)
+        self.assertEqual(found_order.order_id, order.order_id)
         self.assertEqual(found_order.customer_id, order.customer_id)
         self.assertEqual(found_order.order_date, order.order_date)
         self.assertEqual(found_order.status, order.status)
@@ -121,22 +134,22 @@ class TestOrderModel(TestCase):
 
     def test_update_an_order(self):
         """It should update an Order"""
-        order = OrderFactory(status="created")
+        order = OrderFactory(status="pending")
         order.create()
 
-        # Assert that it was assigned an id
-        self.assertIsNotNone(order.id)
-        self.assertEqual(order.status, "created")
+        # Assert that it was assigned an order_id
+        self.assertIsNotNone(order.order_id)
+        self.assertEqual(order.status, "pending")
 
         # Fetch it back
-        order = Order.find(order.id)
+        order = Order.find_by_order_id(order.order_id)
 
         # Change the status
         order.status = "processing"
         order.update()
 
         # Fetch it back again
-        updated_order = Order.find(order.id)
+        updated_order = Order.find_by_order_id(order.order_id)
 
         self.assertEqual(updated_order.status, "processing")
 
@@ -148,8 +161,8 @@ class TestOrderModel(TestCase):
         order = OrderFactory()
         order.create()
 
-        # Assert that it was assigned an id
-        self.assertIsNotNone(order.id)
+        # Assert that it was assigned an order_id
+        self.assertIsNotNone(order.order_id)
 
         # Assert that it shows up in the database
         orders = Order.all()
@@ -165,36 +178,57 @@ class TestOrderModel(TestCase):
     def test_serialize_an_order(self):
         """It should serialize an Order"""
         order = OrderFactory()
-        item = ItemFactory(order=order)
+        order_item = OrderItemFactory(order=order)
 
         serialized_order = order.serialize()
 
-        self.assertEqual(serialized_order["id"], order.id)
-        self.assertEqual(serialized_order["customer_id"], order.customer_id)
+        self.assertEqual(
+            serialized_order["order_id"],
+            order.order_id,
+        )
+        self.assertEqual(
+            serialized_order["customer_id"],
+            order.customer_id,
+        )
         self.assertEqual(
             serialized_order["order_date"],
             order.order_date.isoformat(),
         )
-        self.assertEqual(serialized_order["status"], order.status)
+        self.assertEqual(
+            serialized_order["status"],
+            order.status,
+        )
         self.assertEqual(
             serialized_order["total_amount"],
             str(order.total_amount),
         )
 
-        # Assert that the Item is included in the Order
+        # Assert that the OrderItem is included in the Order
         self.assertEqual(len(serialized_order["items"]), 1)
 
         serialized_item = serialized_order["items"][0]
-        self.assertEqual(serialized_item["id"], item.id)
-        self.assertEqual(serialized_item["order_id"], item.order_id)
-        self.assertEqual(serialized_item["product_id"], item.product_id)
-        self.assertEqual(serialized_item["quantity"], item.quantity)
-        self.assertEqual(serialized_item["price"], str(item.price))
+        self.assertEqual(serialized_item["id"], order_item.id)
+        self.assertEqual(
+            serialized_item["order_id"],
+            order_item.order_id,
+        )
+        self.assertEqual(
+            serialized_item["product_id"],
+            order_item.product_id,
+        )
+        self.assertEqual(
+            serialized_item["quantity"],
+            order_item.quantity,
+        )
+        self.assertEqual(
+            serialized_item["price"],
+            str(order_item.price),
+        )
 
     def test_deserialize_an_order(self):
         """It should deserialize an Order"""
         order = OrderFactory()
-        item = ItemFactory(order=order)
+        order_item = OrderItemFactory(order=order)
 
         serialized_order = order.serialize()
 
@@ -206,13 +240,13 @@ class TestOrderModel(TestCase):
         self.assertEqual(new_order.status, order.status)
         self.assertEqual(new_order.total_amount, order.total_amount)
 
-        # Assert that the Item was also deserialized
+        # Assert that the OrderItem was also deserialized
         self.assertEqual(len(new_order.items), 1)
 
         new_item = new_order.items[0]
-        self.assertEqual(new_item.product_id, item.product_id)
-        self.assertEqual(new_item.quantity, item.quantity)
-        self.assertEqual(new_item.price, item.price)
+        self.assertEqual(new_item.product_id, order_item.product_id)
+        self.assertEqual(new_item.quantity, order_item.quantity)
+        self.assertEqual(new_item.price, order_item.price)
 
     def test_deserialize_order_with_key_error(self):
         """It should not deserialize an Order with missing data"""
@@ -234,23 +268,23 @@ class TestOrderModel(TestCase):
             [],
         )
 
-    def test_deserialize_item_with_key_error(self):
-        """It should not deserialize an Item with missing data"""
-        item = Item()
+    def test_deserialize_order_item_with_key_error(self):
+        """It should not deserialize an OrderItem with missing data"""
+        order_item = OrderItem()
 
         self.assertRaises(
             DataValidationError,
-            item.deserialize,
+            order_item.deserialize,
             {},
         )
 
-    def test_deserialize_item_with_type_error(self):
-        """It should not deserialize an Item with invalid data"""
-        item = Item()
+    def test_deserialize_order_item_with_type_error(self):
+        """It should not deserialize an OrderItem with invalid data"""
+        order_item = OrderItem()
 
         self.assertRaises(
             DataValidationError,
-            item.deserialize,
+            order_item.deserialize,
             [],
         )
 
@@ -267,11 +301,11 @@ class TestOrderModel(TestCase):
         )
 
     def test_update_order_with_no_id(self):
-        """It should not update an Order without an id"""
+        """It should not update an Order without an order_id"""
         order = Order(
             customer_id=123,
             order_date=datetime.now(),
-            status="created",
+            status="pending",
             total_amount=Decimal("59.99"),
         )
 
@@ -304,29 +338,44 @@ class TestOrderModel(TestCase):
             order.delete,
         )
 
-    def test_add_item_to_order(self):
-        """It should create an Order with an Item and retrieve the Item"""
+    def test_add_order_item_to_order(self):
+        """It should create an Order with an OrderItem and retrieve it"""
         order = OrderFactory()
-        item = ItemFactory(order=order)
+        order_item = OrderItemFactory(order=order)
 
-        # Save the Order and its related Item
+        # Save the Order and its related OrderItem
         order.create()
 
-        self.assertIsNotNone(order.id)
+        self.assertIsNotNone(order.order_id)
+
+        # Save the order_id before expiring the session
+        order_id = order.order_id
 
         # Force SQLAlchemy to reload data from the database
         db.session.expire_all()
 
         # Fetch the Order back
-        found_order = Order.find(order.id)
+        found_order = Order.find_by_order_id(order_id)
 
         self.assertIsNotNone(found_order)
         self.assertEqual(len(found_order.items), 1)
 
-        # Verify the Item was persisted with the Order
+        # Verify the OrderItem was persisted with the Order
         found_item = found_order.items[0]
 
-        self.assertEqual(found_item.product_id, item.product_id)
-        self.assertEqual(found_item.quantity, item.quantity)
-        self.assertEqual(found_item.price, item.price)
-        self.assertEqual(found_item.order_id, found_order.id)
+        self.assertEqual(
+            found_item.product_id,
+            order_item.product_id,
+        )
+        self.assertEqual(
+            found_item.quantity,
+            order_item.quantity,
+        )
+        self.assertEqual(
+            found_item.price,
+            order_item.price,
+        )
+        self.assertEqual(
+            found_item.order_id,
+            found_order.order_id,
+        )
