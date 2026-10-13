@@ -15,16 +15,13 @@
 ######################################################################
 
 """
-YourResourceModel Service
+Orders Service
 
-This service implements a REST API that allows you to Create, Read, Update
-and Delete YourResourceModel
+This service implements the REST API for Orders.
 """
 
-from flask import jsonify, request, url_for, abort
-from flask import current_app as app  # Import Flask application
-from service.models import YourResourceModel
-from service.common import status  # HTTP Status Codes
+from flask import current_app as app
+from service.common import status
 
 
 ######################################################################
@@ -42,5 +39,3 @@ def index():
 ######################################################################
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
-
-# Todo: Place your REST API code here ...

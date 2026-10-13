@@ -15,16 +15,19 @@
 ######################################################################
 
 """
-TestYourResourceModel API Service Test Suite
+Orders API Service Test Suite
 """
 
 # pylint: disable=duplicate-code
 import os
 import logging
 from unittest import TestCase
+from unittest.mock import patch
+
+from flask import abort
 from wsgi import app
 from service.common import status
-from service.models import db, YourResourceModel
+from service.models import db, Order, Item
 
 DATABASE_URI = os.getenv(
     "DATABASE_URI", "postgresql+psycopg://postgres:postgres@localhost:5432/testdb"
@@ -35,7 +38,7 @@ DATABASE_URI = os.getenv(
 #  T E S T   C A S E S
 ######################################################################
 # pylint: disable=too-many-public-methods
-class TestYourResourceService(TestCase):
+class TestOrderService(TestCase):
     """REST API Server Tests"""
 
     @classmethod
@@ -56,7 +59,8 @@ class TestYourResourceService(TestCase):
     def setUp(self):
         """Runs before each test"""
         self.client = app.test_client()
-        db.session.query(YourResourceModel).delete()  # clean up the last tests
+        db.session.query(Item).delete()
+        db.session.query(Order).delete()
         db.session.commit()
 
     def tearDown(self):
@@ -72,4 +76,56 @@ class TestYourResourceService(TestCase):
         resp = self.client.get("/")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-    # Todo: Add your test cases here...
+    def test_bad_request(self):
+        """It should return 400 Bad Request"""
+        with patch.dict(
+            app.view_functions,
+            {"index": lambda: abort(status.HTTP_400_BAD_REQUEST)},
+        ):
+            resp = self.client.get("/")
+            self.assertEqual(
+                resp.status_code,
+                status.HTTP_400_BAD_REQUEST,
+            )
+
+    def test_not_found(self):
+        """It should return 404 Not Found"""
+        resp = self.client.get("/this-route-does-not-exist")
+
+        self.assertEqual(
+            resp.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_method_not_allowed(self):
+        """It should return 405 Method Not Allowed"""
+        resp = self.client.post("/")
+
+        self.assertEqual(
+            resp.status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    def test_unsupported_media_type(self):
+        """It should return 415 Unsupported Media Type"""
+        with patch.dict(
+            app.view_functions,
+            {"index": lambda: abort(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)},
+        ):
+            resp = self.client.get("/")
+            self.assertEqual(
+                resp.status_code,
+                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            )
+
+    def test_internal_server_error(self):
+        """It should return 500 Internal Server Error"""
+        with patch.dict(
+            app.view_functions,
+            {"index": lambda: abort(status.HTTP_500_INTERNAL_SERVER_ERROR)},
+        ):
+            resp = self.client.get("/")
+            self.assertEqual(
+                resp.status_code,
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
