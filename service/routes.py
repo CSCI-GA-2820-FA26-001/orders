@@ -15,15 +15,15 @@
 ######################################################################
 
 """
-YourResourceModel Service
+Orders Service
 
-This service implements a REST API that allows you to Create, Read, Update
-and Delete YourResourceModel
+This service implements the REST API for Orders.
 """
 
 from flask import jsonify, request, url_for, abort
 from flask import current_app as app  # Import Flask application
-from service.models import YourResourceModel
+from service.models import YourResourceModel  # temporary until Order model merges
+# from service.models import Order, Item  # switch to this after the Order model PR merges
 from service.common import status  # HTTP Status Codes
 
 
@@ -32,9 +32,13 @@ from service.common import status  # HTTP Status Codes
 ######################################################################
 @app.route("/")
 def index():
-    """Root URL response"""
+    """Root URL response with service metadata"""
     return (
-        "Reminder: return some useful information in json format about the service here",
+        jsonify(
+            name="Orders Service",
+            version="1.0",
+            list_url="/orders",
+        ),
         status.HTTP_200_OK,
     )
 
