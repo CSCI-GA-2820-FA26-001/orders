@@ -20,11 +20,12 @@ Orders Service
 This service implements the REST API for Orders.
 """
 
+from decimal import Decimal, InvalidOperation
 from flask import jsonify, request, url_for, abort
 from flask import current_app as app  # Import Flask application
-from service.models import YourResourceModel  # temporary until Order model merges
-# from service.models import Order, Item  # switch to this after the Order model PR merges
 from service.common import status  # HTTP Status Codes
+from service.models import Order, OrderItem
+
 
 
 ######################################################################
@@ -46,5 +47,89 @@ def index():
 ######################################################################
 #  R E S T   A P I   E N D P O I N T S
 ######################################################################
+@app.route("/orders", methods=["POST"])
+def create_order():
+    """Creates a new Order"""
 
-# Todo: Place your REST API code here ...
+    app.logger.info("Request to create an Order")
+
+    data = request.get_json(silent=True)
+
+    # Validate request body
+    if not data:
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            "No request data was provided",
+        )
+
+    if "customer_id" not in data:
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            "Missing required field: customer_id",
+        )
+
+    if "items" not in data:
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            "Missing required field: items",
+        )
+
+    if not isinstance(data["items"], list) or not data["items"]:
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            "items must be a non-empty list",
+        )
+
+    # Create the Order
+    order = Order()
+    order.customer_id = data["customer_id"]
+    order.status = "pending"
+
+    # Start total at $0.00
+    total_amount = Decimal("0.00")
+
+    # Create each OrderItem
+    for item_data in data["items"]:
+        try:
+            product_id = item_data["product_id"]
+            quantity = int(item_data["quantity"])
+            price = Decimal(str(item_data["price"]))
+
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+            InvalidOperation,
+        ):
+            abort(
+                status.HTTP_400_BAD_REQUEST,
+                "Invalid order item",
+            )
+
+        if quantity <= 0 or price < 0:
+            abort(
+                status.HTTP_400_BAD_REQUEST,
+                "Invalid order item quantity or price",
+            )
+
+        item = OrderItem()
+        item.product_id = product_id
+        item.quantity = quantity
+        item.price = price
+
+        order.items.append(item)
+
+        total_amount += price * quantity
+
+    # Set calculated total
+    order.total_amount = total_amount
+
+    # Save Order and OrderItems
+    order.create()
+
+    # Return newly created Order
+    response = jsonify(order.serialize())
+    response.status_code = status.HTTP_201_CREATED
+    response.headers["Location"] = f"/orders/{order.id}"
+
+    return response
