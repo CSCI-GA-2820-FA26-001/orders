@@ -21,10 +21,11 @@ This service implements the REST API for Orders.
 """
 
 from decimal import Decimal, InvalidOperation
-from flask import current_app as app
-from flask import abort, jsonify, request
-from service.common import status
+from flask import jsonify, request, url_for, abort
+from flask import current_app as app  # Import Flask application
+from service.common import status  # HTTP Status Codes
 from service.models import Order, OrderItem
+
 
 
 ######################################################################
@@ -32,9 +33,13 @@ from service.models import Order, OrderItem
 ######################################################################
 @app.route("/")
 def index():
-    """Root URL response"""
+    """Root URL response with service metadata"""
     return (
-        "Reminder: return some useful information in json format about the service here",
+        jsonify(
+            name="Orders Service",
+            version="1.0",
+            list_url="/orders",
+        ),
         status.HTTP_200_OK,
     )
 
