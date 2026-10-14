@@ -302,3 +302,55 @@ class TestOrderService(TestCase):
             status.HTTP_400_BAD_REQUEST,
         )
         self.assertTrue(resp.is_json)
+
+    def test_get_order(self):
+        """It should retrieve an existing Order by id"""
+        payload = {
+            "customer_id": 123,
+            "items": [
+                {
+                    "product_id": 1001,
+                    "quantity": 2,
+                    "price": "10.50",
+                },
+                {
+                    "product_id": 1002,
+                    "quantity": 1,
+                    "price": "5.00",
+                },
+            ],
+        }
+
+        create_resp = self.client.post("/orders", json=payload)
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        created = create_resp.get_json()
+        order_id = created["order_id"]
+
+        resp = self.client.get(f"/orders/{order_id}")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+
+        data = resp.get_json()
+        self.assertEqual(data["order_id"], order_id)
+        self.assertEqual(data["customer_id"], 123)
+        self.assertEqual(data["status"], "pending")
+        self.assertEqual(data["total_amount"], "26.00")
+        self.assertIn("order_date", data)
+        self.assertIsNotNone(data["order_date"])
+
+    def test_get_order_not_found(self):
+        """It should return 404 when the Order does not exist"""
+        resp = self.client.get("/orders/0")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertNotIn("order_id", data)
+        self.assertNotIn("customer_id", data)
+        self.assertNotIn("order_date", data)
+        self.assertNotIn("total_amount", data)
+        self.assertNotIn("items", data)
