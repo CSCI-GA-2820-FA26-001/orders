@@ -133,3 +133,25 @@ def create_order():
     response.headers["Location"] = f"/orders/{order.id}"
 
     return response
+
+
+######################################################################
+# READ AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>", methods=["GET"])
+def get_order(order_id):
+    """
+    Retrieve a single Order
+
+    This endpoint will return an Order based on it's id
+    """
+    app.logger.info("Request to Retrieve an order with id [%s]", order_id)
+
+    order = Order.find_by_order_id(order_id)
+    if not order:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Order with id '{order_id}' was not found.",
+        )
+
+    return jsonify(order.serialize()), status.HTTP_200_OK
