@@ -25,7 +25,6 @@ from flask import jsonify, request, url_for, abort
 from flask import current_app as app  # Import Flask application
 from service.common import status  # HTTP Status Codes
 from service.models import Order, OrderItem
-from decimal import Decimal
 
 
 ######################################################################
@@ -241,6 +240,34 @@ def update_order(order_id):
     return jsonify(order.serialize()), status.HTTP_200_OK
 
 
+######################################################################
+# DELETE AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>", methods=["DELETE"])
+def delete_order(order_id):
+    """
+    Delete an Order
+
+    This endpoint will delete an Order based on the id specified in the path
+    """
+    app.logger.info("Request to Delete an order with id [%s]", order_id)
+
+    order = Order.find_by_order_id(order_id)
+    if not order:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Order with id '{order_id}' was not found.",
+        )
+
+    order.delete()
+
+    app.logger.info("Order with id [%s] has been deleted", order_id)
+    return "", status.HTTP_204_NO_CONTENT
+
+
+######################################################################
+# ADD AN ITEM TO AN ORDER
+######################################################################
 @app.route("/orders/<int:order_id>/items", methods=["POST"])
 def add_item_to_order(order_id):
     """Add an item to an existing Order"""
@@ -310,100 +337,3 @@ def add_item_to_order(order_id):
     response.status_code = status.HTTP_201_CREATED
     response.headers["Location"] = f"/orders/{order_id}/items/{item.id}"
     return response
-
-    def test_add_item_to_order(self):
-        """It should add an item to an existing Order"""
-        create_resp = self.client.post(
-            "/orders",
-            json={
-                "customer_id": 123,
-                "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
-            },
-        )
-        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
-        order_id = create_resp.get_json()["order_id"]
-
-        resp = self.client.post(
-            f"/orders/{order_id}/items",
-            json={"product_id": 1002, "quantity": 2, "price": "5.25"},
-        )
-
-        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(resp.is_json)
-        item_data = resp.get_json()
-        self.assertIn("item_id", item_data)
-        self.assertEqual(item_data["product_id"], 1002)
-        self.assertEqual(item_data["quantity"], 2)
-        self.assertEqual(item_data["price"], "5.25")
-        self.assertEqual(
-            resp.headers["Location"],
-            f"/orders/{order_id}/items/{item_data['item_id']}",
-        )
-
-        saved_order = Order.find(order_id)
-        self.assertEqual(len(saved_order.items), 2)
-        self.assertEqual(saved_order.total_amount, Decimal("21.00"))
-
-    def test_add_item_to_order_not_found(self):
-        resp = self.client.post(
-            "/orders/0/items",
-            json={"product_id": 1002, "quantity": 1, "price": "5.25"},
-        )
-
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertTrue(resp.is_json)
-
-    def test_add_item_to_order_invalid_payload(self):
-        create_resp = self.client.post(
-            "/orders",
-            json={
-                "customer_id": 123,
-                "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
-            },
-        )
-        order_id = create_resp.get_json()["order_id"]
-        url = f"/orders/{order_id}/items"
-
-        payloads = [
-            [],
-            {},
-            {"quantity": 1, "price": "5.25"},
-            {"product_id": 1002, "price": "5.25"},
-            {"product_id": 1002, "quantity": 1},
-            {"product_id": "1002", "quantity": 1, "price": "5.25"},
-            {"product_id": 0, "quantity": 1, "price": "5.25"},
-            {"product_id": 1002, "quantity": True, "price": "5.25"},
-            {"product_id": 1002, "quantity": 0, "price": "5.25"},
-            {"product_id": 1002, "quantity": 1, "price": "invalid"},
-            {"product_id": 1002, "quantity": 1, "price": "-1.00"},
-            {"product_id": 1002, "quantity": 1, "price": "NaN"},
-        ]
-
-        for payload in payloads:
-            with self.subTest(payload=payload):
-                resp = self.client.post(url, json=payload)
-                self.assertEqual(
-                    resp.status_code,
-                    status.HTTP_400_BAD_REQUEST,
-                )
-                self.assertTrue(resp.is_json)
-
-    def test_list_orders_invalid_customer_id(self):
-        resp = self.client.get("/orders?customer_id=abc")
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_update_order_rejects_boolean_customer_id(self):
-        create_resp = self.client.post(
-            "/orders",
-            json={
-                "customer_id": 123,
-                "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
-            },
-        )
-        order_id = create_resp.get_json()["order_id"]
-
-        resp = self.client.put(
-            f"/orders/{order_id}",
-            json={"customer_id": True},
-        )
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
