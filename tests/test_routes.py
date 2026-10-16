@@ -357,6 +357,48 @@ class TestOrderService(TestCase):
         self.assertNotIn("total_amount", data)
         self.assertNotIn("items", data)
 
+    def test_delete_order(self):
+        """It should Delete an Order"""
+        payload = {
+            "customer_id": 123,
+            "items": [
+                {
+                    "product_id": 1001,
+                    "quantity": 2,
+                    "price": "10.50",
+                }
+            ],
+        }
+
+        create_resp = self.client.post("/orders", json=payload)
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        order_id = create_resp.get_json()["order_id"]
+
+        resp = self.client.delete(f"/orders/{order_id}")
+
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.data, b"")
+
+        self.assertIsNone(Order.find_by_order_id(order_id))
+        self.assertEqual(
+            OrderItem.query.filter_by(order_id=order_id).count(),
+            0,
+        )
+
+        get_resp = self.client.get(f"/orders/{order_id}")
+        self.assertEqual(get_resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_delete_order_not_found(self):
+        """It should return 404 when deleting an Order that does not exist"""
+        resp = self.client.delete("/orders/888")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+
     def test_update_order(self):
         """It should update the customer_id of an existing Order"""
         create_resp = self.client.post(
