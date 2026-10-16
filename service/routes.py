@@ -185,3 +185,56 @@ def get_order(order_id):
         )
 
     return jsonify(order.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# UPDATE AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>", methods=["PUT"])
+def update_order(order_id):
+    """Update top-level fields on an existing Order"""
+    app.logger.info("Request to update Order with id [%s]", order_id)
+
+    order = Order.find_by_order_id(order_id)
+    if not order:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Order with id '{order_id}' was not found.",
+        )
+
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict) or not data:
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            "A JSON request body is required.",
+        )
+
+    # This endpoint updates order-level data only.
+    if "items" in data:
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            "Order items must be updated through the items resource.",
+        )
+
+    if "customer_id" not in data:
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            "Missing required field: customer_id",
+        )
+
+    customer_id = data["customer_id"]
+    if (
+        not isinstance(customer_id, int)
+        or isinstance(customer_id, bool)
+        or customer_id <= 0
+    ):
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            "customer_id must be a positive integer",
+        )
+
+    order.customer_id = customer_id
+    order.update()
+
+    return jsonify(order.serialize()), status.HTTP_200_OK
