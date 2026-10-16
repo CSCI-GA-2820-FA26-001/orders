@@ -24,10 +24,12 @@ import logging
 from unittest import TestCase
 from unittest.mock import patch
 
+
 from flask import abort
 from wsgi import app
 from service.common import status
 from service.models import db, Order, OrderItem
+from decimal import Decimal
 
 DATABASE_URI = os.getenv(
     "DATABASE_URI",
@@ -83,7 +85,6 @@ class TestOrderService(TestCase):
         self.assertEqual(data["name"], "Orders Service")
         self.assertEqual(data["version"], "1.0")
         self.assertEqual(data["list_url"], "/orders")
-
 
     def test_bad_request(self):
         """It should return 400 Bad Request"""
@@ -399,6 +400,270 @@ class TestOrderService(TestCase):
         data = resp.get_json()
         self.assertEqual(data["error"], "Not Found")
         self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+
+    def test_update_order(self):
+        """It should update the customer_id of an existing Order"""
+        create_resp = self.client.post(
+            "/orders",
+            json={
+                "customer_id": 123,
+                "items": [
+                    {
+                        "product_id": 1001,
+                        "quantity": 2,
+                        "price": "10.50",
+                    }
+                ],
+            },
+        )
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        order_id = create_resp.get_json()["order_id"]
+
+        resp = self.client.put(
+            f"/orders/{order_id}",
+            json={"customer_id": 456},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["order_id"], order_id)
+        self.assertEqual(data["customer_id"], 456)
+        self.assertEqual(len(data["items"]), 1)
+
+        saved_order = Order.find(order_id)
+        self.assertEqual(saved_order.customer_id, 456)
+        self.assertEqual(len(saved_order.items), 1)
+
+    def test_update_order_not_found(self):
+        """It should return JSON 404 when the Order does not exist"""
+        resp = self.client.put(
+            "/orders/0",
+            json={"customer_id": 456},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+
+    def test_update_order_invalid_payload(self):
+        """It should return JSON 400 for an incomplete or invalid payload"""
+        create_resp = self.client.post(
+            "/orders",
+            json={
+                "customer_id": 123,
+                "items": [
+                    {
+                        "product_id": 1001,
+                        "quantity": 1,
+                        "price": "10.50",
+                    }
+                ],
+            },
+        )
+        order_id = create_resp.get_json()["order_id"]
+
+        invalid_payloads = [
+            {},
+            {"customer_id": 0},
+            {"customer_id": "456"},
+            {"customer_id": 456, "items": []},
+        ]
+
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                resp = self.client.put(f"/orders/{order_id}", json=payload)
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertTrue(resp.is_json)
+
+    def test_list_orders(self):
+        """It should list all orders"""
+        first_payload = {
+            "customer_id": 42,
+            "items": [
+                {
+                    "product_id": 1001,
+                    "quantity": 1,
+                    "price": "10.00",
+                }
+            ],
+        }
+        second_payload = {
+            "customer_id": 10,
+            "items": [
+                {
+                    "product_id": 1002,
+                    "quantity": 1,
+                    "price": "5.00",
+                }
+            ],
+        }
+
+        first_create = self.client.post("/orders", json=first_payload)
+        second_create = self.client.post("/orders", json=second_payload)
+
+        self.assertEqual(first_create.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_create.status_code, status.HTTP_201_CREATED)
+
+        first_order = first_create.get_json()
+        second_order = second_create.get_json()
+
+        resp = self.client.get("/orders")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+
+        data = resp.get_json()
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 2)
+
+        returned_order_ids = {order["order_id"] for order in data}
+        self.assertEqual(
+            returned_order_ids,
+            {first_order["order_id"], second_order["order_id"]},
+        )
+
+    def test_list_orders_by_customer_id(self):
+        """It should list only orders for the requested customer"""
+        customer_42_payload = {
+            "customer_id": 42,
+            "items": [
+                {
+                    "product_id": 1001,
+                    "quantity": 1,
+                    "price": "10.00",
+                }
+            ],
+        }
+        customer_10_payload = {
+            "customer_id": 10,
+            "items": [
+                {
+                    "product_id": 1002,
+                    "quantity": 1,
+                    "price": "5.00",
+                }
+            ],
+        }
+
+        first_create = self.client.post("/orders", json=customer_42_payload)
+        second_create = self.client.post("/orders", json=customer_42_payload)
+        other_create = self.client.post("/orders", json=customer_10_payload)
+
+        self.assertEqual(first_create.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_create.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(other_create.status_code, status.HTTP_201_CREATED)
+
+        resp = self.client.get("/orders?customer_id=42")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+
+        data = resp.get_json()
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 2)
+        self.assertTrue(all(order["customer_id"] == 42 for order in data))
+
+    def test_list_orders_empty(self):
+        """It should return an empty list when there are no orders"""
+        resp = self.client.get("/orders")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+        self.assertEqual(resp.get_json(), [])
+
+    def test_add_item_to_order(self):
+        """It should add an item to an existing Order"""
+        create_resp = self.client.post(
+            "/orders",
+            json={
+                "customer_id": 123,
+                "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
+            },
+        )
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        order_id = create_resp.get_json()["order_id"]
+
+        resp = self.client.post(
+            f"/orders/{order_id}/items",
+            json={"product_id": 1002, "quantity": 2, "price": "5.25"},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        item_data = resp.get_json()
+        self.assertIn("id", item_data)
+        self.assertEqual(item_data["product_id"], 1002)
+        self.assertEqual(item_data["quantity"], 2)
+        self.assertEqual(item_data["price"], "5.25")
+
+        saved_order = Order.find(order_id)
+        self.assertEqual(len(saved_order.items), 2)
+        self.assertEqual(saved_order.total_amount, Decimal("21.00"))
+
+    def test_add_item_to_order_not_found(self):
+        resp = self.client.post(
+            "/orders/0/items",
+            json={"product_id": 1002, "quantity": 1, "price": "5.25"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_add_item_to_order_invalid_payload(self):
+        create_resp = self.client.post(
+            "/orders",
+            json={
+                "customer_id": 123,
+                "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
+            },
+        )
+        order_id = create_resp.get_json()["order_id"]
+        url = f"/orders/{order_id}/items"
+
+        payloads = [
+            [],
+            {},
+            {"quantity": 1, "price": "5.25"},
+            {"product_id": 1002, "price": "5.25"},
+            {"product_id": 1002, "quantity": 1},
+            {"product_id": "1002", "quantity": 1, "price": "5.25"},
+            {"product_id": 0, "quantity": 1, "price": "5.25"},
+            {"product_id": 1002, "quantity": True, "price": "5.25"},
+            {"product_id": 1002, "quantity": 0, "price": "5.25"},
+            {"product_id": 1002, "quantity": 1, "price": "invalid"},
+            {"product_id": 1002, "quantity": 1, "price": "-1.00"},
+            {"product_id": 1002, "quantity": 1, "price": "NaN"},
+        ]
+
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                resp = self.client.post(url, json=payload)
+                self.assertEqual(
+                    resp.status_code,
+                    status.HTTP_400_BAD_REQUEST,
+                )
+
+    def test_list_orders_invalid_customer_id(self):
+        resp = self.client.get("/orders?customer_id=abc")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_order_rejects_boolean_customer_id(self):
+        create_resp = self.client.post(
+            "/orders",
+            json={
+                "customer_id": 123,
+                "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
+            },
+        )
+        order_id = create_resp.get_json()["order_id"]
+
+        resp = self.client.put(
+            f"/orders/{order_id}",
+            json={"customer_id": True},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_get_order_item(self):
         """It should Read a single Item from an Order"""
