@@ -25,6 +25,7 @@ from flask import jsonify, request, url_for, abort
 from flask import current_app as app  # Import Flask application
 from service.common import status  # HTTP Status Codes
 from service.models import Order, OrderItem
+from decimal import Decimal
 
 
 ######################################################################
@@ -238,3 +239,171 @@ def update_order(order_id):
     order.update()
 
     return jsonify(order.serialize()), status.HTTP_200_OK
+
+
+@app.route("/orders/<int:order_id>/items", methods=["POST"])
+def add_item_to_order(order_id):
+    """Add an item to an existing Order"""
+    app.logger.info(
+        "Request to add an item to Order with id [%s]",
+        order_id,
+    )
+
+    order = Order.find_by_order_id(order_id)
+    if not order:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Order with id '{order_id}' was not found.",
+        )
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        abort(
+            status.HTTP_400_BAD_REQUEST,
+            "A JSON request body is required.",
+        )
+
+    for field in ("product_id", "quantity", "price"):
+        if field not in data:
+            abort(
+                status.HTTP_400_BAD_REQUEST,
+                f"Missing required field: {field}",
+            )
+
+    product_id = data["product_id"]
+    quantity_value = data["quantity"]
+
+    if (
+        not isinstance(product_id, int)
+        or isinstance(product_id, bool)
+        or product_id <= 0
+    ):
+        abort(status.HTTP_400_BAD_REQUEST, "product_id must be a positive integer")
+
+    if (
+        not isinstance(quantity_value, int)
+        or isinstance(quantity_value, bool)
+        or quantity_value <= 0
+    ):
+        abort(status.HTTP_400_BAD_REQUEST, "quantity must be a positive integer")
+
+    try:
+        price = Decimal(str(data["price"]))
+    except (TypeError, ValueError, InvalidOperation):
+        abort(status.HTTP_400_BAD_REQUEST, "price must be a valid number")
+
+    if not price.is_finite() or price < 0:
+        abort(status.HTTP_400_BAD_REQUEST, "price must be a non-negative number")
+
+    item = OrderItem()
+    item.product_id = product_id
+    item.quantity = quantity_value
+    item.price = price
+
+    order.items.append(item)
+
+    order.total_amount = Decimal(str(order.total_amount or 0)) + price * quantity_value
+
+    order.update()
+
+    response = jsonify(item.serialize())
+    response.status_code = status.HTTP_201_CREATED
+    response.headers["Location"] = f"/orders/{order_id}/items/{item.id}"
+    return response
+
+    def test_add_item_to_order(self):
+        """It should add an item to an existing Order"""
+        create_resp = self.client.post(
+            "/orders",
+            json={
+                "customer_id": 123,
+                "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
+            },
+        )
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        order_id = create_resp.get_json()["order_id"]
+
+        resp = self.client.post(
+            f"/orders/{order_id}/items",
+            json={"product_id": 1002, "quantity": 2, "price": "5.25"},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(resp.is_json)
+        item_data = resp.get_json()
+        self.assertIn("item_id", item_data)
+        self.assertEqual(item_data["product_id"], 1002)
+        self.assertEqual(item_data["quantity"], 2)
+        self.assertEqual(item_data["price"], "5.25")
+        self.assertEqual(
+            resp.headers["Location"],
+            f"/orders/{order_id}/items/{item_data['item_id']}",
+        )
+
+        saved_order = Order.find(order_id)
+        self.assertEqual(len(saved_order.items), 2)
+        self.assertEqual(saved_order.total_amount, Decimal("21.00"))
+
+    def test_add_item_to_order_not_found(self):
+        resp = self.client.post(
+            "/orders/0/items",
+            json={"product_id": 1002, "quantity": 1, "price": "5.25"},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+    def test_add_item_to_order_invalid_payload(self):
+        create_resp = self.client.post(
+            "/orders",
+            json={
+                "customer_id": 123,
+                "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
+            },
+        )
+        order_id = create_resp.get_json()["order_id"]
+        url = f"/orders/{order_id}/items"
+
+        payloads = [
+            [],
+            {},
+            {"quantity": 1, "price": "5.25"},
+            {"product_id": 1002, "price": "5.25"},
+            {"product_id": 1002, "quantity": 1},
+            {"product_id": "1002", "quantity": 1, "price": "5.25"},
+            {"product_id": 0, "quantity": 1, "price": "5.25"},
+            {"product_id": 1002, "quantity": True, "price": "5.25"},
+            {"product_id": 1002, "quantity": 0, "price": "5.25"},
+            {"product_id": 1002, "quantity": 1, "price": "invalid"},
+            {"product_id": 1002, "quantity": 1, "price": "-1.00"},
+            {"product_id": 1002, "quantity": 1, "price": "NaN"},
+        ]
+
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                resp = self.client.post(url, json=payload)
+                self.assertEqual(
+                    resp.status_code,
+                    status.HTTP_400_BAD_REQUEST,
+                )
+                self.assertTrue(resp.is_json)
+
+    def test_list_orders_invalid_customer_id(self):
+        resp = self.client.get("/orders?customer_id=abc")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_order_rejects_boolean_customer_id(self):
+        create_resp = self.client.post(
+            "/orders",
+            json={
+                "customer_id": 123,
+                "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
+            },
+        )
+        order_id = create_resp.get_json()["order_id"]
+
+        resp = self.client.put(
+            f"/orders/{order_id}",
+            json={"customer_id": True},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
