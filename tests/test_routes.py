@@ -84,7 +84,6 @@ class TestOrderService(TestCase):
         self.assertEqual(data["version"], "1.0")
         self.assertEqual(data["list_url"], "/orders")
 
-
     def test_bad_request(self):
         """It should return 400 Bad Request"""
         with patch.dict(
@@ -357,3 +356,99 @@ class TestOrderService(TestCase):
         self.assertNotIn("order_date", data)
         self.assertNotIn("total_amount", data)
         self.assertNotIn("items", data)
+
+    def test_list_orders(self):
+        """It should list all orders"""
+        first_payload = {
+            "customer_id": 42,
+            "items": [
+                {
+                    "product_id": 1001,
+                    "quantity": 1,
+                    "price": "10.00",
+                }
+            ],
+        }
+        second_payload = {
+            "customer_id": 10,
+            "items": [
+                {
+                    "product_id": 1002,
+                    "quantity": 1,
+                    "price": "5.00",
+                }
+            ],
+        }
+
+        first_create = self.client.post("/orders", json=first_payload)
+        second_create = self.client.post("/orders", json=second_payload)
+
+        self.assertEqual(first_create.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_create.status_code, status.HTTP_201_CREATED)
+
+        first_order = first_create.get_json()
+        second_order = second_create.get_json()
+
+        resp = self.client.get("/orders")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+
+        data = resp.get_json()
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 2)
+
+        returned_order_ids = {order["order_id"] for order in data}
+        self.assertEqual(
+            returned_order_ids,
+            {first_order["order_id"], second_order["order_id"]},
+        )
+
+    def test_list_orders_by_customer_id(self):
+        """It should list only orders for the requested customer"""
+        customer_42_payload = {
+            "customer_id": 42,
+            "items": [
+                {
+                    "product_id": 1001,
+                    "quantity": 1,
+                    "price": "10.00",
+                }
+            ],
+        }
+        customer_10_payload = {
+            "customer_id": 10,
+            "items": [
+                {
+                    "product_id": 1002,
+                    "quantity": 1,
+                    "price": "5.00",
+                }
+            ],
+        }
+
+        first_create = self.client.post("/orders", json=customer_42_payload)
+        second_create = self.client.post("/orders", json=customer_42_payload)
+        other_create = self.client.post("/orders", json=customer_10_payload)
+
+        self.assertEqual(first_create.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_create.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(other_create.status_code, status.HTTP_201_CREATED)
+
+        resp = self.client.get("/orders?customer_id=42")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+
+        data = resp.get_json()
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 2)
+        self.assertTrue(all(order["customer_id"] == 42 for order in data))
+
+    def test_list_orders_empty(self):
+        """It should return an empty list when there are no orders"""
+        resp = self.client.get("/orders")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+        self.assertEqual(resp.get_json(), [])

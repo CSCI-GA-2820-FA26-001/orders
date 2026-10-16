@@ -27,7 +27,6 @@ from service.common import status  # HTTP Status Codes
 from service.models import Order, OrderItem
 
 
-
 ######################################################################
 # GET INDEX
 ######################################################################
@@ -133,6 +132,37 @@ def create_order():
     response.headers["Location"] = f"/orders/{order.id}"
 
     return response
+
+
+######################################################################
+# LIST ORDERS
+######################################################################
+@app.route("/orders", methods=["GET"])
+def list_orders():
+    """List all Orders, optionally filtered by customer_id"""
+    app.logger.info("Request to List Orders")
+
+    customer_id = request.args.get("customer_id")
+
+    query = Order.query
+
+    if customer_id is not None:
+        try:
+            customer_id = int(customer_id)
+        except ValueError:
+            abort(
+                status.HTTP_400_BAD_REQUEST,
+                "customer_id must be an integer",
+            )
+
+        query = query.filter_by(customer_id=customer_id)
+
+    orders = query.all()
+
+    return (
+        jsonify([order.serialize() for order in orders]),
+        status.HTTP_200_OK,
+    )
 
 
 ######################################################################
