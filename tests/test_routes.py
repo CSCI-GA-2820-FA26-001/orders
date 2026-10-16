@@ -399,3 +399,90 @@ class TestOrderService(TestCase):
         data = resp.get_json()
         self.assertEqual(data["error"], "Not Found")
         self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+
+    def test_get_order_item(self):
+        """It should Read a single Item from an Order"""
+        payload = {
+            "customer_id": 123,
+            "items": [
+                {"product_id": 1001, "quantity": 2, "price": "10.50"},
+                {"product_id": 1002, "quantity": 1, "price": "5.00"},
+            ],
+        }
+
+        create_resp = self.client.post("/orders", json=payload)
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        order = create_resp.get_json()
+        order_id = order["order_id"]
+        item = order["items"][1]
+
+        resp = self.client.get(f"/orders/{order_id}/items/{item['id']}")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+
+        data = resp.get_json()
+        self.assertEqual(data["id"], item["id"])
+        self.assertEqual(data["order_id"], order_id)
+        self.assertEqual(data["product_id"], 1002)
+        self.assertEqual(data["quantity"], 1)
+        self.assertEqual(data["price"], "5.00")
+
+    def test_get_order_item_order_not_found(self):
+        """It should return 404 when reading an Item from an Order that does not exist"""
+        resp = self.client.get("/orders/0/items/1")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("Order with id '0' was not found", data["message"])
+
+    def test_get_order_item_not_found(self):
+        """It should return 404 when the Item does not exist"""
+        payload = {
+            "customer_id": 123,
+            "items": [
+                {"product_id": 1001, "quantity": 2, "price": "10.50"},
+            ],
+        }
+
+        create_resp = self.client.post("/orders", json=payload)
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        order_id = create_resp.get_json()["order_id"]
+
+        resp = self.client.get(f"/orders/{order_id}/items/0")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("Item with id '0' was not found", data["message"])
+
+    def test_get_order_item_wrong_order(self):
+        """It should return 404 when the Item belongs to a different Order"""
+        payload = {
+            "customer_id": 123,
+            "items": [
+                {"product_id": 1001, "quantity": 2, "price": "10.50"},
+            ],
+        }
+
+        order_a = self.client.post("/orders", json=payload).get_json()
+        order_b = self.client.post("/orders", json=payload).get_json()
+        item_b_id = order_b["items"][0]["id"]
+
+        resp = self.client.get(f"/orders/{order_a['order_id']}/items/{item_b_id}")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn(f"Item with id '{item_b_id}' was not found", data["message"])
+
+        # The same Item is still readable through its own Order
+        resp = self.client.get(f"/orders/{order_b['order_id']}/items/{item_b_id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)

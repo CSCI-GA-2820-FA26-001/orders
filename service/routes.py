@@ -180,3 +180,36 @@ def delete_order(order_id):
 
     app.logger.info("Order with id [%s] has been deleted", order_id)
     return "", status.HTTP_204_NO_CONTENT
+
+
+######################################################################
+# READ AN ITEM FROM AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["GET"])
+def get_order_item(order_id, item_id):
+    """
+    Retrieve a single Item from an Order
+
+    This endpoint will return an OrderItem based on its id and the id of its Order
+    """
+    app.logger.info(
+        "Request to Retrieve item with id [%s] from order with id [%s]",
+        item_id,
+        order_id,
+    )
+
+    order = Order.find_by_order_id(order_id)
+    if not order:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Order with id '{order_id}' was not found.",
+        )
+
+    item = OrderItem.find(item_id)
+    if not item or item.order_id != order.id:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Item with id '{item_id}' was not found in Order '{order_id}'.",
+        )
+
+    return jsonify(item.serialize()), status.HTTP_200_OK
