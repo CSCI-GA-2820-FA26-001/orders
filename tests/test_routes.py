@@ -751,3 +751,184 @@ class TestOrderService(TestCase):
         # The same Item is still readable through its own Order
         resp = self.client.get(f"/orders/{order_b['order_id']}/items/{item_b_id}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_update_order_item(self):
+        """It should Update an Item in an Order and recalculate the total"""
+        payload = {
+            "customer_id": 123,
+            "items": [
+                {"product_id": 1001, "quantity": 2, "price": "10.50"},
+                {"product_id": 1002, "quantity": 1, "price": "5.00"},
+            ],
+        }
+
+        order = self.client.post("/orders", json=payload).get_json()
+        order_id = order["order_id"]
+        self.assertEqual(order["total_amount"], "26.00")
+        item = next(i for i in order["items"] if i["product_id"] == 1001)
+        other = next(i for i in order["items"] if i["product_id"] == 1002)
+
+        resp = self.client.put(
+            f"/orders/{order_id}/items/{item['id']}",
+            json={"product_id": 2001, "quantity": 3, "price": "4.00"},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+
+        data = resp.get_json()
+        self.assertEqual(data["id"], item["id"])
+        self.assertEqual(data["order_id"], order_id)
+        self.assertEqual(data["product_id"], 2001)
+        self.assertEqual(data["quantity"], 3)
+        self.assertEqual(data["price"], "4.00")
+
+        # The change is persisted and the total reflects it
+        resp = self.client.get(f"/orders/{order_id}/items/{item['id']}")
+        self.assertEqual(resp.get_json(), data)
+
+        resp = self.client.get(f"/orders/{order_id}")
+        self.assertEqual(resp.get_json()["total_amount"], "17.00")
+
+        # The other Item is untouched
+        resp = self.client.get(f"/orders/{order_id}/items/{other['id']}")
+        self.assertEqual(resp.get_json(), other)
+
+    def test_update_order_item_ignores_order_id(self):
+        """It should not move an Item to another Order through the payload"""
+        payload = {
+            "customer_id": 123,
+            "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
+        }
+
+        order_a = self.client.post("/orders", json=payload).get_json()
+        order_b = self.client.post("/orders", json=payload).get_json()
+        item = order_a["items"][0]
+
+        resp = self.client.put(
+            f"/orders/{order_a['order_id']}/items/{item['id']}",
+            json={
+                "order_id": order_b["order_id"],
+                "product_id": 1001,
+                "quantity": 1,
+                "price": "10.50",
+            },
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json()["order_id"], order_a["order_id"])
+
+        resp = self.client.get(f"/orders/{order_a['order_id']}")
+        self.assertEqual(resp.get_json()["total_amount"], "10.50")
+
+        resp = self.client.get(f"/orders/{order_b['order_id']}")
+        self.assertEqual(resp.get_json()["total_amount"], "21.00")
+
+    def test_update_order_item_order_not_found(self):
+        """It should return 404 when updating an Item in an Order that does not exist"""
+        resp = self.client.put(
+            "/orders/0/items/1",
+            json={"product_id": 1001, "quantity": 1, "price": "1.00"},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("Order with id '0' was not found", data["message"])
+
+    def test_update_order_item_not_found(self):
+        """It should return 404 when the Item to update does not exist"""
+        payload = {
+            "customer_id": 123,
+            "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
+        }
+
+        order_id = self.client.post("/orders", json=payload).get_json()["order_id"]
+
+        resp = self.client.put(
+            f"/orders/{order_id}/items/0",
+            json={"product_id": 1001, "quantity": 1, "price": "1.00"},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("Item with id '0' was not found", data["message"])
+
+    def test_update_order_item_wrong_order(self):
+        """It should not update an Item that belongs to a different Order"""
+        payload = {
+            "customer_id": 123,
+            "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
+        }
+
+        order_a = self.client.post("/orders", json=payload).get_json()
+        order_b = self.client.post("/orders", json=payload).get_json()
+        item_b = order_b["items"][0]
+
+        resp = self.client.put(
+            f"/orders/{order_a['order_id']}/items/{item_b['id']}",
+            json={"product_id": 2001, "quantity": 9, "price": "1.00"},
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        # The Item and both totals are unchanged
+        resp = self.client.get(f"/orders/{order_b['order_id']}/items/{item_b['id']}")
+        self.assertEqual(resp.get_json(), item_b)
+
+        for order in (order_a, order_b):
+            resp = self.client.get(f"/orders/{order['order_id']}")
+            self.assertEqual(resp.get_json()["total_amount"], "21.00")
+
+    def test_update_order_item_invalid_payload(self):
+        """It should return JSON 400 for an incomplete or invalid payload"""
+        payload = {
+            "customer_id": 123,
+            "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
+        }
+
+        order = self.client.post("/orders", json=payload).get_json()
+        order_id = order["order_id"]
+        item = order["items"][0]
+        url = f"/orders/{order_id}/items/{item['id']}"
+
+        payloads = [
+            [],
+            {},
+            {"quantity": 1, "price": "5.25"},
+            {"product_id": 1002, "price": "5.25"},
+            {"product_id": 1002, "quantity": 1},
+            {"product_id": "1002", "quantity": 1, "price": "5.25"},
+            {"product_id": 0, "quantity": 1, "price": "5.25"},
+            {"product_id": True, "quantity": 1, "price": "5.25"},
+            {"product_id": 1002, "quantity": True, "price": "5.25"},
+            {"product_id": 1002, "quantity": 0, "price": "5.25"},
+            {"product_id": 1002, "quantity": -1, "price": "5.25"},
+            {"product_id": 1002, "quantity": 1, "price": "invalid"},
+            {"product_id": 1002, "quantity": 1, "price": "-1.00"},
+            {"product_id": 1002, "quantity": 1, "price": "NaN"},
+        ]
+
+        for body in payloads:
+            with self.subTest(payload=body):
+                resp = self.client.put(url, json=body)
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertTrue(resp.is_json)
+                self.assertEqual(resp.get_json()["error"], "Bad Request")
+
+        # A request without a body is rejected too
+        resp = self.client.put(url)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Nothing was changed by the rejected requests
+        resp = self.client.get(url)
+        self.assertEqual(resp.get_json(), item)
+
+        resp = self.client.get(f"/orders/{order_id}")
+        self.assertEqual(resp.get_json()["total_amount"], "21.00")

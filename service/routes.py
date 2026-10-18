@@ -370,3 +370,87 @@ def get_order_item(order_id, item_id):
         )
 
     return jsonify(item.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# UPDATE AN ITEM IN AN ORDER
+######################################################################
+def validate_item_payload(data):
+    """
+    Validates the payload of an Order Item request
+
+    Aborts with 400_BAD_REQUEST if the payload is incomplete or invalid.
+    Returns the validated (product_id, quantity, price).
+    """
+    if not isinstance(data, dict):
+        abort(status.HTTP_400_BAD_REQUEST, "A JSON request body is required.")
+
+    for field in ("product_id", "quantity", "price"):
+        if field not in data:
+            abort(status.HTTP_400_BAD_REQUEST, f"Missing required field: {field}")
+
+    product_id = data["product_id"]
+    quantity = data["quantity"]
+
+    if (
+        not isinstance(product_id, int)
+        or isinstance(product_id, bool)
+        or product_id <= 0
+    ):
+        abort(status.HTTP_400_BAD_REQUEST, "product_id must be a positive integer")
+
+    if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity <= 0:
+        abort(status.HTTP_400_BAD_REQUEST, "quantity must be a positive integer")
+
+    try:
+        price = Decimal(str(data["price"]))
+    except (TypeError, ValueError, InvalidOperation):
+        abort(status.HTTP_400_BAD_REQUEST, "price must be a valid number")
+
+    if not price.is_finite() or price < 0:
+        abort(status.HTTP_400_BAD_REQUEST, "price must be a non-negative number")
+
+    return product_id, quantity, price
+
+
+@app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["PUT"])
+def update_order_item(order_id, item_id):
+    """
+    Update an Item in an Order
+
+    This endpoint will update an OrderItem based on its id and the id of its Order
+    """
+    app.logger.info(
+        "Request to Update item with id [%s] in order with id [%s]",
+        item_id,
+        order_id,
+    )
+
+    order = Order.find_by_order_id(order_id)
+    if not order:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Order with id '{order_id}' was not found.",
+        )
+
+    item = OrderItem.find(item_id)
+    if not item or item.order_id != order.id:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Item with id '{item_id}' was not found in Order '{order_id}'.",
+        )
+
+    product_id, quantity, price = validate_item_payload(request.get_json(silent=True))
+
+    item.product_id = product_id
+    item.quantity = quantity
+    item.price = price
+
+    # The Item and the Order total are saved in one transaction
+    order.total_amount = sum(
+        (i.price * i.quantity for i in order.items), Decimal("0.00")
+    )
+    order.update()
+
+    app.logger.info("Item with id [%s] has been updated", item_id)
+    return jsonify(item.serialize()), status.HTTP_200_OK
