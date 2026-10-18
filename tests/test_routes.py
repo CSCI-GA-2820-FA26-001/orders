@@ -665,6 +665,71 @@ class TestOrderService(TestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_list_order_items(self):
+        """It should List all Items in an Order"""
+        payload_a = {
+            "customer_id": 123,
+            "items": [
+                {"product_id": 1001, "quantity": 2, "price": "10.50"},
+                {"product_id": 1002, "quantity": 1, "price": "5.00"},
+            ],
+        }
+        payload_b = {
+            "customer_id": 456,
+            "items": [
+                {"product_id": 1003, "quantity": 3, "price": "7.25"},
+            ],
+        }
+
+        create_resp = self.client.post("/orders", json=payload_a)
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        order_id = create_resp.get_json()["order_id"]
+
+        create_resp = self.client.post("/orders", json=payload_b)
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+
+        resp = self.client.get(f"/orders/{order_id}/items")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+
+        data = resp.get_json()
+        self.assertEqual(len(data), 2)
+
+        for item in data:
+            self.assertIn("id", item)
+            self.assertEqual(item["order_id"], order_id)
+
+        items = sorted(data, key=lambda item: item["product_id"])
+        self.assertEqual(items[0]["product_id"], 1001)
+        self.assertEqual(items[0]["quantity"], 2)
+        self.assertEqual(items[0]["price"], "10.50")
+        self.assertEqual(items[1]["product_id"], 1002)
+        self.assertEqual(items[1]["quantity"], 1)
+        self.assertEqual(items[1]["price"], "5.00")
+
+    def test_list_order_items_empty(self):
+        """It should return an empty list for an Order with no Items"""
+        order = Order()
+        order.customer_id = 123
+        order.create()
+
+        resp = self.client.get(f"/orders/{order.id}/items")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.get_json(), [])
+
+    def test_list_order_items_order_not_found(self):
+        """It should return 404 when listing Items for an Order that does not exist"""
+        resp = self.client.get("/orders/0/items")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("Order with id '0' was not found", data["message"])
+
     def test_get_order_item(self):
         """It should Read a single Item from an Order"""
         payload = {

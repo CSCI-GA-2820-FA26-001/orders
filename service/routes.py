@@ -340,6 +340,29 @@ def add_item_to_order(order_id):
 
 
 ######################################################################
+# LIST ITEMS IN AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>/items", methods=["GET"])
+def list_order_items(order_id):
+    """
+    List all Items in an Order
+
+    This endpoint will return all OrderItems that belong to the specified Order
+    """
+    app.logger.info("Request to List items for order with id [%s]", order_id)
+
+    order = Order.find_by_order_id(order_id)
+    if not order:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Order with id '{order_id}' was not found.",
+        )
+
+    results = [item.serialize() for item in order.items]
+    return jsonify(results), status.HTTP_200_OK
+
+
+######################################################################
 # READ AN ITEM FROM AN ORDER
 ######################################################################
 @app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["GET"])
