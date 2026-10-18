@@ -997,3 +997,123 @@ class TestOrderService(TestCase):
 
         resp = self.client.get(f"/orders/{order_id}")
         self.assertEqual(resp.get_json()["total_amount"], "21.00")
+
+    def test_delete_order_item(self):
+        """It should Delete an Item from an Order and recalculate the total"""
+        payload = {
+            "customer_id": 123,
+            "items": [
+                {"product_id": 1001, "quantity": 2, "price": "10.50"},
+                {"product_id": 1002, "quantity": 1, "price": "5.00"},
+            ],
+        }
+
+        order = self.client.post("/orders", json=payload).get_json()
+        order_id = order["order_id"]
+        item_id = order["items"][0]["id"]
+        self.assertEqual(order["total_amount"], "26.00")
+
+        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.data, b"")
+
+        # The Item no longer exists
+        resp = self.client.get(f"/orders/{order_id}/items/{item_id}")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+        # The parent Order remains with the other Item and an updated total
+        resp = self.client.get(f"/orders/{order_id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(len(data["items"]), 1)
+        self.assertEqual(data["items"][0]["product_id"], 1002)
+        self.assertEqual(data["total_amount"], "5.00")
+
+    def test_delete_last_order_item(self):
+        """It should keep the Order when its only Item is deleted"""
+        payload = {
+            "customer_id": 123,
+            "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
+        }
+
+        order = self.client.post("/orders", json=payload).get_json()
+        order_id = order["order_id"]
+        item_id = order["items"][0]["id"]
+
+        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+        resp = self.client.get(f"/orders/{order_id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.get_json()
+        self.assertEqual(data["items"], [])
+        self.assertEqual(data["total_amount"], "0.00")
+
+    def test_delete_order_item_not_found(self):
+        """It should return 404 when the Item to delete does not exist"""
+        payload = {
+            "customer_id": 123,
+            "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
+        }
+
+        order = self.client.post("/orders", json=payload).get_json()
+        order_id = order["order_id"]
+        item_id = order["items"][0]["id"]
+
+        # An Item that never existed
+        resp = self.client.delete(f"/orders/{order_id}/items/0")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("Item with id '0' was not found", data["message"])
+
+        # An Item that was already deleted
+        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+        # The second attempt does not change the Order
+        resp = self.client.get(f"/orders/{order_id}")
+        self.assertEqual(resp.get_json()["total_amount"], "0.00")
+
+    def test_delete_order_item_order_not_found(self):
+        """It should return 404 when deleting an Item from an Order that does not exist"""
+        resp = self.client.delete("/orders/0/items/1")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn("Order with id '0' was not found", data["message"])
+
+    def test_delete_order_item_wrong_order(self):
+        """It should not delete an Item that belongs to a different Order"""
+        payload = {
+            "customer_id": 123,
+            "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
+        }
+
+        order_a = self.client.post("/orders", json=payload).get_json()
+        order_b = self.client.post("/orders", json=payload).get_json()
+        item_b_id = order_b["items"][0]["id"]
+
+        resp = self.client.delete(f"/orders/{order_a['order_id']}/items/{item_b_id}")
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertIn(f"Item with id '{item_b_id}' was not found", data["message"])
+
+        # The Item is still there, and neither total changed
+        resp = self.client.get(f"/orders/{order_b['order_id']}/items/{item_b_id}")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        for order in (order_a, order_b):
+            resp = self.client.get(f"/orders/{order['order_id']}")
+            self.assertEqual(resp.get_json()["total_amount"], "21.00")

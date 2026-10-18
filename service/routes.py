@@ -477,3 +477,44 @@ def update_order_item(order_id, item_id):
 
     app.logger.info("Item with id [%s] has been updated", item_id)
     return jsonify(item.serialize()), status.HTTP_200_OK
+
+
+######################################################################
+# DELETE AN ITEM FROM AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["DELETE"])
+def delete_order_item(order_id, item_id):
+    """
+    Delete an Item from an Order
+
+    This endpoint will delete an OrderItem based on its id and the id of its Order
+    """
+    app.logger.info(
+        "Request to Delete item with id [%s] from order with id [%s]",
+        item_id,
+        order_id,
+    )
+
+    order = Order.find_by_order_id(order_id)
+    if not order:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Order with id '{order_id}' was not found.",
+        )
+
+    item = OrderItem.find(item_id)
+    if not item or item.order_id != order.id:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Item with id '{item_id}' was not found in Order '{order_id}'.",
+        )
+
+    # Updating the total before the delete commits both in one transaction
+    order.total_amount = sum(
+        (i.price * i.quantity for i in order.items if i.id != item.id),
+        Decimal("0.00"),
+    )
+    item.delete()
+
+    app.logger.info("Item with id [%s] has been deleted", item_id)
+    return "", status.HTTP_204_NO_CONTENT
