@@ -21,7 +21,7 @@ This service implements the REST API for Orders.
 """
 
 from decimal import Decimal, InvalidOperation
-from flask import jsonify, request, url_for, abort
+from flask import jsonify, request, abort
 from flask import current_app as app  # Import Flask application
 from service.common import status  # HTTP Status Codes
 from service.models import Order, OrderItem

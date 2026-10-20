@@ -18,18 +18,17 @@
 Orders API Service Test Suite
 """
 
-# pylint: disable=duplicate-code
+# pylint: disable=duplicate-code,too-many-lines
 import os
 import logging
+from decimal import Decimal
 from unittest import TestCase
 from unittest.mock import patch
-
 
 from flask import abort
 from wsgi import app
 from service.common import status
 from service.models import db, Order, OrderItem
-from decimal import Decimal
 
 DATABASE_URI = os.getenv(
     "DATABASE_URI",
@@ -605,6 +604,7 @@ class TestOrderService(TestCase):
         self.assertEqual(saved_order.total_amount, Decimal("21.00"))
 
     def test_add_item_to_order_not_found(self):
+        """It should return 404 when adding an item to a missing Order"""
         resp = self.client.post(
             "/orders/0/items",
             json={"product_id": 1002, "quantity": 1, "price": "5.25"},
@@ -612,6 +612,7 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_add_item_to_order_invalid_payload(self):
+        """It should return 400 for an incomplete or invalid item payload"""
         create_resp = self.client.post(
             "/orders",
             json={
@@ -646,10 +647,12 @@ class TestOrderService(TestCase):
                 )
 
     def test_list_orders_invalid_customer_id(self):
+        """It should return 400 when customer_id is not an integer"""
         resp = self.client.get("/orders?customer_id=abc")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_update_order_rejects_boolean_customer_id(self):
+        """It should return 400 when customer_id is a boolean"""
         create_resp = self.client.post(
             "/orders",
             json={
