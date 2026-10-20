@@ -44,7 +44,7 @@ def index():
 
 
 ######################################################################
-#  R E S T   A P I   E N D P O I N T S
+#  REST API ENDPOINTS
 ######################################################################
 @app.route("/orders", methods=["POST"])
 def create_order():
