@@ -379,3 +379,20 @@ class TestOrderModel(TestCase):
             found_item.order_id,
             found_order.order_id,
         )
+
+    def test_find_by_status(self):
+        """It should Find Orders by status"""
+        order1 = OrderFactory(status="pending")
+        order2 = OrderFactory(status="cancelled")
+        order3 = OrderFactory(status="pending")
+
+        order1.create()
+        order2.create()
+        order3.create()
+
+        orders = Order.find_by_status("pending")
+
+        self.assertEqual(len(orders), 2)
+
+        for order in orders:
+            self.assertEqual(order.status, "pending")
