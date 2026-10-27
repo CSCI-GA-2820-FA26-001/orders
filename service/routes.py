@@ -67,16 +67,12 @@ def create_order():
             "Missing required field: customer_id",
         )
 
-    if "items" not in data:
-        abort(
-            status.HTTP_400_BAD_REQUEST,
-            "Missing required field: items",
-        )
+    items = data.get("items", [])
 
-    if not isinstance(data["items"], list) or not data["items"]:
+    if not isinstance(items, list):
         abort(
             status.HTTP_400_BAD_REQUEST,
-            "items must be a non-empty list",
+            "items must be a list",
         )
 
     # Create the Order
@@ -88,7 +84,7 @@ def create_order():
     total_amount = Decimal("0.00")
 
     # Create each OrderItem
-    for item_data in data["items"]:
+    for item_data in items:
         try:
             product_id = item_data["product_id"]
             quantity = int(item_data["quantity"])
