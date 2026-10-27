@@ -1120,3 +1120,69 @@ class TestOrderService(TestCase):
         for order in (order_a, order_b):
             resp = self.client.get(f"/orders/{order['order_id']}")
             self.assertEqual(resp.get_json()["total_amount"], "21.00")
+
+    def test_list_orders_by_status(self):
+        """It should list only orders with the requested status"""
+        pending_order = Order()
+        pending_order.customer_id = 42
+        pending_order.status = "pending"
+        pending_order.create()
+
+        cancelled_order = Order()
+        cancelled_order.customer_id = 10
+        cancelled_order.status = "cancelled"
+        cancelled_order.create()
+
+        another_pending_order = Order()
+        another_pending_order.customer_id = 20
+        another_pending_order.status = "pending"
+        another_pending_order.create()
+
+        resp = self.client.get("/orders?status=pending")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+
+        data = resp.get_json()
+        self.assertIsInstance(data, list)
+        self.assertEqual(len(data), 2)
+        self.assertTrue(all(order["status"] == "pending" for order in data))
+
+    def test_list_orders_by_status_no_match(self):
+        """It should return an empty list when no Orders match the status"""
+        order = Order()
+        order.customer_id = 42
+        order.status = "pending"
+        order.create()
+
+        resp = self.client.get("/orders?status=completed")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+        self.assertEqual(resp.get_json(), [])
+
+    def test_list_orders_by_customer_id_and_status(self):
+        """It should list orders filtered by customer_id and status"""
+        order1 = Order()
+        order1.customer_id = 42
+        order1.status = "pending"
+        order1.create()
+
+        order2 = Order()
+        order2.customer_id = 42
+        order2.status = "cancelled"
+        order2.create()
+
+        order3 = Order()
+        order3.customer_id = 10
+        order3.status = "pending"
+        order3.create()
+
+        resp = self.client.get("/orders?customer_id=42&status=pending")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        data = resp.get_json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["customer_id"], 42)
+        self.assertEqual(data[0]["status"], "pending")

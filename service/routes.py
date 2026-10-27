@@ -143,6 +143,7 @@ def list_orders():
     app.logger.info("Request to List Orders")
 
     customer_id = request.args.get("customer_id")
+    order_status = request.args.get("status")
 
     query = Order.query
 
@@ -156,6 +157,9 @@ def list_orders():
             )
 
         query = query.filter_by(customer_id=customer_id)
+
+    if order_status is not None:
+        query = query.filter_by(status=order_status)
 
     orders = query.all()
 

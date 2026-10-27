@@ -108,3 +108,8 @@ class Order(db.Model, PersistentBase):
     def find_by_order_id(cls, order_id):
         """Finds an Order by its order_id"""
         return cls.find(order_id)
+
+    @classmethod
+    def find_by_status(cls, status):
+        """Returns all Orders with the specified status"""
+        return cls.query.filter(cls.status == status).all()
