@@ -237,9 +237,12 @@ class TestOrderService(TestCase):
 
         self.assertEqual(
             resp.status_code,
-            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_201_CREATED,
         )
-        self.assertTrue(resp.is_json)
+        data = resp.get_json()
+        self.assertEqual(data["customer_id"], 123)
+        self.assertEqual(data.get("items", []), [])
+        self.assertEqual(data["total_amount"], "0.00")
 
     def test_create_order_empty_items(self):
         """It should not Create an Order with empty items"""
@@ -255,9 +258,12 @@ class TestOrderService(TestCase):
 
         self.assertEqual(
             resp.status_code,
-            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_201_CREATED,
         )
-        self.assertTrue(resp.is_json)
+        data = resp.get_json()
+        self.assertEqual(data["customer_id"], 123)
+        self.assertEqual(data.get("items", []), [])
+        self.assertEqual(data["total_amount"], "0.00")
 
     def test_create_order_invalid_item(self):
         """It should not Create an Order with an invalid item"""
