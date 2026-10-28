@@ -124,7 +124,7 @@ DELETE /orders/{order_id}
 
 Items are not changed through this endpoint, so a body containing `items` is rejected with `400 Bad Request`. Use the items endpoints below instead.
 
-All three return `404 Not Found` if the order does not exist.
+`GET` and `PUT` return `404 Not Found` if the order does not exist. `DELETE` is idempotent and always returns `204 No Content`, whether or not the order exists.
 
 ### Add an item to an order
 

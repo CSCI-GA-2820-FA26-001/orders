@@ -248,20 +248,21 @@ def delete_order(order_id):
     """
     Delete an Order
 
-    This endpoint will delete an Order based on the id specified in the path
+    This endpoint will delete an Order based on the id specified in the path.
+    DELETE is idempotent: returns 204 whether or not the Order exists.
     """
     app.logger.info("Request to Delete an order with id [%s]", order_id)
 
     order = Order.find_by_order_id(order_id)
-    if not order:
-        abort(
-            status.HTTP_404_NOT_FOUND,
-            f"Order with id '{order_id}' was not found.",
+    if order:
+        order.delete()
+        app.logger.info("Order with id [%s] has been deleted", order_id)
+    else:
+        app.logger.info(
+            "Order with id [%s] was not found; returning 204 (idempotent)",
+            order_id,
         )
 
-    order.delete()
-
-    app.logger.info("Order with id [%s] has been deleted", order_id)
     return "", status.HTTP_204_NO_CONTENT
 
 
