@@ -2,6 +2,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Language-Python-blue.svg)](https://python.org/)
+[![CI](https://github.com/CSCI-GA-2820-FA26-001/orders/actions/workflows/ci.yml/badge.svg)](https://github.com/CSCI-GA-2820-FA26-001/orders/actions/workflows/ci.yml)
+[![Codecov](https://codecov.io/gh/CSCI-GA-2820-FA26-001/orders/branch/master/graph/badge.svg)](https://codecov.io/gh/CSCI-GA-2820-FA26-001/orders)
 
 A RESTful microservice for the eCommerce back end built by the Orders squad of NYU CSCI-GA.2820 DevOps and Agile Methodologies (Fall 2026). An **Order** is a collection of **order items** created from products and quantities.
 
