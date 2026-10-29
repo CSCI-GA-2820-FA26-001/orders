@@ -396,15 +396,38 @@ class TestOrderService(TestCase):
         self.assertEqual(get_resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_delete_order_not_found(self):
-        """It should return 404 when deleting an Order that does not exist"""
+        """It should return 204 when deleting an Order that does not exist"""
         resp = self.client.delete("/orders/888")
 
-        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertTrue(resp.is_json)
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(resp.data, b"")
 
-        data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
-        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+    def test_delete_order_idempotent(self):
+        """It should return 204 when deleting the same Order twice"""
+        create_resp = self.client.post(
+            "/orders",
+            json={
+                "customer_id": 123,
+                "items": [
+                    {
+                        "product_id": 1001,
+                        "quantity": 1,
+                        "price": "10.00",
+                    }
+                ],
+            },
+        )
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        order_id = create_resp.get_json()["order_id"]
+
+        first = self.client.delete(f"/orders/{order_id}")
+        self.assertEqual(first.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(first.data, b"")
+        self.assertIsNone(Order.find_by_order_id(order_id))
+
+        second = self.client.delete(f"/orders/{order_id}")
+        self.assertEqual(second.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(second.data, b"")
 
     def test_update_order(self):
         """It should update the customer_id of an existing Order"""
