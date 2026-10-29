@@ -15,11 +15,17 @@ from .order_item import OrderItem
 #  O R D E R   M O D E L
 ######################################################################
 class Order(db.Model, PersistentBase):
-    """
-    Class that represents an Order
-    """
+    """Class that represents an Order."""
 
     __tablename__ = "orders"
+
+    VALID_STATUSES = {
+        "pending",
+        "processing",
+        "shipped",
+        "delivered",
+        "cancelled",
+    }
 
     # Table Schema
     id = db.Column(db.Integer, primary_key=True)
@@ -40,14 +46,14 @@ class Order(db.Model, PersistentBase):
 
     @property
     def order_id(self):
-        """Returns the public Order identifier"""
+        """Returns the public Order identifier."""
         return self.id
 
     def __repr__(self):
-        return f"<Order customer_id={self.customer_id} " f"order_id=[{self.order_id}]>"
+        return f"<Order customer_id={self.customer_id} order_id=[{self.order_id}]>"
 
     def serialize(self) -> dict:
-        """Converts an Order into a dictionary"""
+        """Converts an Order into a dictionary."""
         order = {
             "order_id": self.order_id,
             "customer_id": self.customer_id,
@@ -66,50 +72,164 @@ class Order(db.Model, PersistentBase):
 
         return order
 
-    def deserialize(self, data: dict) -> None:
-        """
-        Populates an Order from a dictionary
-
-        Args:
-            data (dict): A dictionary containing the Order data
-        """
-        try:
-            self.customer_id = data["customer_id"]
-
-            if isinstance(data["order_date"], str):
-                self.order_date = datetime.fromisoformat(data["order_date"])
-            else:
-                self.order_date = data["order_date"]
-
-            self.status = data.get("status", "pending")
-            self.total_amount = Decimal(str(data["total_amount"]))
-
-            item_list = data.get("items", [])
-
-            for json_item in item_list:
-                item = OrderItem()
-                item.deserialize(json_item)
-                self.items.append(item)
-
-        except AttributeError as error:
-            raise DataValidationError("Invalid attribute: " + error.args[0]) from error
-
-        except KeyError as error:
+    @staticmethod
+    def _validate_customer_id(value):
+        """Validate and return the customer ID."""
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise DataValidationError(
-                "Invalid Order: missing " + error.args[0]
+                "Invalid Order data: customer_id must be a positive integer"
+            )
+        return value
+
+    @staticmethod
+    def _parse_order_date(value):
+        """Parse an order date or return the default date."""
+        if value is None:
+            return datetime.now()
+
+        if isinstance(value, datetime):
+            return value
+
+        if not isinstance(value, str):
+            raise DataValidationError(
+                "Invalid Order data: order_date must be a date or ISO-format string"
+            )
+
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError as error:
+            raise DataValidationError(f"Invalid Order data: {error}") from error
+
+    @classmethod
+    def _validate_status(cls, value):
+        """Validate and return the order status."""
+        if not isinstance(value, str) or value not in cls.VALID_STATUSES:
+            valid_statuses = ", ".join(sorted(cls.VALID_STATUSES))
+            raise DataValidationError(
+                f"Invalid Order data: status '{value}' is not valid. "
+                f"Valid statuses: {valid_statuses}"
+            )
+        return value
+
+    @staticmethod
+    def _positive_integer(value, field):
+        """Convert a value to a positive integer."""
+        if isinstance(value, bool):
+            raise DataValidationError(
+                f"Invalid order item data: {field} must be a positive integer"
+            )
+
+        try:
+            value = int(value)
+        except (TypeError, ValueError) as error:
+            raise DataValidationError(
+                f"Invalid order item data: {field} must be a positive integer"
             ) from error
 
+        if value <= 0:
+            raise DataValidationError(
+                f"Invalid order item data: {field} must be a positive integer"
+            )
+        return value
+
+    @staticmethod
+    def _parse_price(value):
+        """Convert and validate an item price."""
+        try:
+            price = Decimal(str(value))
         except (TypeError, ValueError, InvalidOperation) as error:
             raise DataValidationError(
-                "Invalid Order: body of request contained bad or no data " + str(error)
+                f"Invalid order item data: price must be a valid number: {error}"
             ) from error
+
+        if not price.is_finite() or price < Decimal("0.00"):
+            raise DataValidationError(
+                "Invalid order item data: price must be finite and non-negative"
+            )
+        return price
+
+    @classmethod
+    def _deserialize_item(cls, data):
+        """Create an OrderItem from a dictionary."""
+        if not isinstance(data, dict):
+            raise DataValidationError("Invalid order item data: expected an object")
+
+        try:
+            product_id = data["product_id"]
+            quantity = data["quantity"]
+            price = data["price"]
+        except KeyError as error:
+            raise DataValidationError(
+                f"Order item missing required field: {error.args[0]}"
+            ) from error
+
+        item = OrderItem()
+        item.product_id = cls._positive_integer(product_id, "product_id")
+        item.quantity = cls._positive_integer(quantity, "quantity")
+        item.price = cls._parse_price(price)
+        return item
+
+    def _deserialize_items(self, item_data):
+        """Populate order items and return their calculated total."""
+        if not isinstance(item_data, list):
+            raise DataValidationError("Invalid Order data: items must be a list")
+
+        self.items.clear()
+        calculated_total = Decimal("0.00")
+
+        for data in item_data:
+            item = self._deserialize_item(data)
+            self.items.append(item)
+            calculated_total += item.price * item.quantity
+
+        return calculated_total
+
+    @staticmethod
+    def _parse_total_amount(value, calculated_total):
+        """Validate a supplied total or use the calculated item total."""
+        if value is None:
+            return calculated_total
+
+        try:
+            total = Decimal(str(value))
+        except (TypeError, ValueError, InvalidOperation) as error:
+            raise DataValidationError(
+                f"Invalid Order data: total_amount must be a valid number: {error}"
+            ) from error
+
+        if not total.is_finite() or total < Decimal("0.00"):
+            raise DataValidationError(
+                "Invalid Order data: total_amount must be finite and non-negative"
+            )
+        return total
+
+    def deserialize(self, data: dict) -> None:
+        """Populate this Order from a dictionary and validate its data."""
+        if not isinstance(data, dict):
+            raise DataValidationError("Invalid Order data: expected a dictionary")
+
+        try:
+            self.customer_id = self._validate_customer_id(data["customer_id"])
+        except KeyError as error:
+            raise DataValidationError(
+                f"Invalid Order: missing {error.args[0]}"
+            ) from error
+
+        self.order_date = self._parse_order_date(data.get("order_date"))
+        self.status = self._validate_status(data.get("status", "pending"))
+
+        calculated_total = self._deserialize_items(data.get("items", []))
+        self.total_amount = self._parse_total_amount(
+            data.get("total_amount"),
+            calculated_total,
+        )
 
     @classmethod
     def find_by_order_id(cls, order_id):
-        """Finds an Order by its order_id"""
+        """Finds an Order by its order_id."""
         return cls.find(order_id)
 
     @classmethod
     def find_by_status(cls, status):
-        """Returns all Orders with the specified status"""
+        """Returns all Orders with the specified status."""
         return cls.query.filter(cls.status == status).all()

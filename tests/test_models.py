@@ -396,3 +396,66 @@ class TestOrderModel(TestCase):
 
         for order in orders:
             self.assertEqual(order.status, "pending")
+
+    def test_deserialize_valid_order_data(self):
+        """Scenario: Deserialize valid Order data populates model successfully"""
+        valid_payload = {
+            "customer_id": 101,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "99.99",
+            "items": [{"product_id": 5, "quantity": 2, "price": "49.99"}],
+        }
+        order = Order()
+        order.deserialize(valid_payload)
+        self.assertEqual(order.customer_id, 101)
+        self.assertEqual(order.status, "pending")
+        self.assertEqual(len(order.items), 1)
+
+    def test_deserialize_rejects_negative_customer_id(self):
+        """Reject negative customer_id during deserialization"""
+        bad_payload = {
+            "customer_id": -5,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "10.00",
+            "items": [],
+        }
+        order = Order()
+        self.assertRaises(DataValidationError, order.deserialize, bad_payload)
+
+    def test_deserialize_rejects_invalid_status(self):
+        """Reject invalid status value"""
+        bad_payload = {
+            "customer_id": 101,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "fake_status",
+            "total_amount": "10.00",
+            "items": [],
+        }
+        order = Order()
+        self.assertRaises(DataValidationError, order.deserialize, bad_payload)
+
+    def test_deserialize_rejects_negative_total_amount(self):
+        """Reject negative total_amount value"""
+        bad_payload = {
+            "customer_id": 101,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "-50.00",
+            "items": [],
+        }
+        order = Order()
+        self.assertRaises(DataValidationError, order.deserialize, bad_payload)
+
+    def test_deserialize_rejects_items_not_list(self):
+        """Reject items field that is not a list"""
+        bad_payload = {
+            "customer_id": 101,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "10.00",
+            "items": "this-is-not-a-list",
+        }
+        order = Order()
+        self.assertRaises(DataValidationError, order.deserialize, bad_payload)
