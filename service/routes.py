@@ -24,7 +24,7 @@ from decimal import Decimal, InvalidOperation
 from flask import jsonify, request, abort
 from flask import current_app as app  # Import Flask application
 from service.common import status  # HTTP Status Codes
-from service.models import Order, OrderItem
+from service.models import Order, OrderItem, DataValidationError
 
 
 ######################################################################
@@ -54,73 +54,20 @@ def create_order():
 
     data = request.get_json(silent=True)
 
-    # Validate request body
+    # Basic HTTP‑level check: no payload
     if not data:
         abort(
             status.HTTP_400_BAD_REQUEST,
             "No request data was provided",
         )
 
-    if "customer_id" not in data:
-        abort(
-            status.HTTP_400_BAD_REQUEST,
-            "Missing required field: customer_id",
-        )
-
-    items = data.get("items", [])
-
-    if not isinstance(items, list):
-        abort(
-            status.HTTP_400_BAD_REQUEST,
-            "items must be a list",
-        )
-
-    # Create the Order
-    order = Order()
-    order.customer_id = data["customer_id"]
-    order.status = "pending"
-
-    # Start total at $0.00
-    total_amount = Decimal("0.00")
-
-    # Create each OrderItem
-    for item_data in items:
-        try:
-            product_id = item_data["product_id"]
-            quantity = int(item_data["quantity"])
-            price = Decimal(str(item_data["price"]))
-
-        except (
-            KeyError,
-            TypeError,
-            ValueError,
-            InvalidOperation,
-        ):
-            abort(
-                status.HTTP_400_BAD_REQUEST,
-                "Invalid order item",
-            )
-
-        if quantity <= 0 or price < 0:
-            abort(
-                status.HTTP_400_BAD_REQUEST,
-                "Invalid order item quantity or price",
-            )
-
-        item = OrderItem()
-        item.product_id = product_id
-        item.quantity = quantity
-        item.price = price
-
-        order.items.append(item)
-
-        total_amount += price * quantity
-
-    # Set calculated total
-    order.total_amount = total_amount
-
-    # Save Order and OrderItems
-    order.create()
+    # All business validation moved into Order.deserialize()
+    try:
+        order = Order()
+        order.deserialize(data)
+        order.create()
+    except DataValidationError as err:
+        abort(status.HTTP_400_BAD_REQUEST, str(err))
 
     # Return newly created Order
     response = jsonify(order.serialize())
@@ -192,7 +139,7 @@ def get_order(order_id):
 ######################################################################
 @app.route("/orders/<int:order_id>", methods=["PUT"])
 def update_order(order_id):
-    """Update top-level fields on an existing Order"""
+    """Update top‑level fields on an existing Order"""
     app.logger.info("Request to update Order with id [%s]", order_id)
 
     order = Order.find_by_order_id(order_id)
@@ -210,7 +157,7 @@ def update_order(order_id):
             "A JSON request body is required.",
         )
 
-    # This endpoint updates order-level data only.
+    # This endpoint updates order‑level data only.
     if "items" in data:
         abort(
             status.HTTP_400_BAD_REQUEST,
@@ -321,7 +268,7 @@ def add_item_to_order(order_id):
         abort(status.HTTP_400_BAD_REQUEST, "price must be a valid number")
 
     if not price.is_finite() or price < 0:
-        abort(status.HTTP_400_BAD_REQUEST, "price must be a non-negative number")
+        abort(status.HTTP_400_BAD_REQUEST, "price must be a non‑negative number")
 
     item = OrderItem()
     item.product_id = product_id
@@ -432,7 +379,7 @@ def validate_item_payload(data):
         abort(status.HTTP_400_BAD_REQUEST, "price must be a valid number")
 
     if not price.is_finite() or price < 0:
-        abort(status.HTTP_400_BAD_REQUEST, "price must be a non-negative number")
+        abort(status.HTTP_400_BAD_REQUEST, "price must be a non‑negative number")
 
     return product_id, quantity, price
 

@@ -1215,3 +1215,69 @@ class TestOrderService(TestCase):
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["customer_id"], 42)
         self.assertEqual(data[0]["status"], "pending")
+
+    def test_create_order_valid_deserialize_payload(self):
+        """Accept valid payload, deserialize in model and return 201 Created"""
+        payload = {
+            "customer_id": 200,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "20.00",
+            "items": [{"product_id": 10, "quantity": 1, "price": "20.00"}],
+        }
+        resp = self.client.post("/orders", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        data = resp.get_json()
+        self.assertEqual(data["customer_id"], 200)
+
+    def test_create_order_rejects_negative_customer_id(self):
+        """POST /orders: negative customer_id triggers model validation → 400"""
+        payload = {
+            "customer_id": -99,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "10.00",
+            "items": [],
+        }
+        resp = self.client.post("/orders", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.is_json)
+
+    def test_create_order_rejects_invalid_status(self):
+        """POST /orders: invalid status enum triggers model validation → 400"""
+        payload = {
+            "customer_id": 100,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "wrong_status",
+            "total_amount": "10.00",
+            "items": [],
+        }
+        resp = self.client.post("/orders", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.is_json)
+
+    def test_create_order_rejects_negative_total_amount(self):
+        """POST /orders: negative total_amount triggers model validation →400"""
+        payload = {
+            "customer_id": 100,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "-99.00",
+            "items": [],
+        }
+        resp = self.client.post("/orders", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.is_json)
+
+    def test_create_order_rejects_items_not_list(self):
+        """POST /orders: items is not list triggers model validation →400"""
+        payload = {
+            "customer_id": 100,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "10.00",
+            "items": "not-a-list",
+        }
+        resp = self.client.post("/orders", json=payload)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.is_json)

@@ -109,10 +109,8 @@ class TestOrderModel(TestCase):
         order = OrderFactory()
         order.create()
 
-        # Assert that it was assigned an order_id
         self.assertIsNotNone(order.order_id)
 
-        # Assert that it shows up in the database
         orders = Order.all()
         self.assertEqual(len(orders), 1)
 
@@ -121,7 +119,6 @@ class TestOrderModel(TestCase):
         order = OrderFactory()
         order.create()
 
-        # Read it back by order_id
         found_order = Order.find_by_order_id(order.order_id)
 
         self.assertIsNotNone(found_order)
@@ -137,20 +134,14 @@ class TestOrderModel(TestCase):
         order = OrderFactory(status="pending")
         order.create()
 
-        # Assert that it was assigned an order_id
         self.assertIsNotNone(order.order_id)
         self.assertEqual(order.status, "pending")
 
-        # Fetch it back
         order = Order.find_by_order_id(order.order_id)
-
-        # Change the status
         order.status = "processing"
         order.update()
 
-        # Fetch it back again
         updated_order = Order.find_by_order_id(order.order_id)
-
         self.assertEqual(updated_order.status, "processing")
 
     def test_delete_an_order(self):
@@ -161,17 +152,13 @@ class TestOrderModel(TestCase):
         order = OrderFactory()
         order.create()
 
-        # Assert that it was assigned an order_id
         self.assertIsNotNone(order.order_id)
 
-        # Assert that it shows up in the database
         orders = Order.all()
         self.assertEqual(len(orders), 1)
 
-        # Delete the order
         order.delete()
 
-        # Assert that it was removed from the database
         orders = Order.all()
         self.assertEqual(len(orders), 0)
 
@@ -182,48 +169,26 @@ class TestOrderModel(TestCase):
 
         serialized_order = order.serialize()
 
-        self.assertEqual(
-            serialized_order["order_id"],
-            order.order_id,
-        )
-        self.assertEqual(
-            serialized_order["customer_id"],
-            order.customer_id,
-        )
+        self.assertEqual(serialized_order["order_id"], order.order_id)
+        self.assertEqual(serialized_order["customer_id"], order.customer_id)
         self.assertEqual(
             serialized_order["order_date"],
             order.order_date.isoformat(),
         )
-        self.assertEqual(
-            serialized_order["status"],
-            order.status,
-        )
+        self.assertEqual(serialized_order["status"], order.status)
         self.assertEqual(
             serialized_order["total_amount"],
             str(order.total_amount),
         )
 
-        # Assert that the OrderItem is included in the Order
         self.assertEqual(len(serialized_order["items"]), 1)
 
         serialized_item = serialized_order["items"][0]
         self.assertEqual(serialized_item["id"], order_item.id)
-        self.assertEqual(
-            serialized_item["order_id"],
-            order_item.order_id,
-        )
-        self.assertEqual(
-            serialized_item["product_id"],
-            order_item.product_id,
-        )
-        self.assertEqual(
-            serialized_item["quantity"],
-            order_item.quantity,
-        )
-        self.assertEqual(
-            serialized_item["price"],
-            str(order_item.price),
-        )
+        self.assertEqual(serialized_item["order_id"], order_item.order_id)
+        self.assertEqual(serialized_item["product_id"], order_item.product_id)
+        self.assertEqual(serialized_item["quantity"], order_item.quantity)
+        self.assertEqual(serialized_item["price"], str(order_item.price))
 
     def test_deserialize_an_order(self):
         """It should deserialize an Order"""
@@ -239,8 +204,6 @@ class TestOrderModel(TestCase):
         self.assertEqual(new_order.order_date, order.order_date)
         self.assertEqual(new_order.status, order.status)
         self.assertEqual(new_order.total_amount, order.total_amount)
-
-        # Assert that the OrderItem was also deserialized
         self.assertEqual(len(new_order.items), 1)
 
         new_item = new_order.items[0]
@@ -292,7 +255,6 @@ class TestOrderModel(TestCase):
     def test_add_order_failed(self, exception_mock):
         """It should not create an Order on database error"""
         exception_mock.side_effect = Exception()
-
         order = OrderFactory()
 
         self.assertRaises(
@@ -318,7 +280,6 @@ class TestOrderModel(TestCase):
     def test_update_order_failed(self, exception_mock):
         """It should not update an Order on database error"""
         exception_mock.side_effect = Exception()
-
         order = OrderFactory()
 
         self.assertRaises(
@@ -330,7 +291,6 @@ class TestOrderModel(TestCase):
     def test_delete_order_failed(self, exception_mock):
         """It should not delete an Order on database error"""
         exception_mock.side_effect = Exception()
-
         order = OrderFactory()
 
         self.assertRaises(
@@ -343,42 +303,22 @@ class TestOrderModel(TestCase):
         order = OrderFactory()
         order_item = OrderItemFactory(order=order)
 
-        # Save the Order and its related OrderItem
         order.create()
 
         self.assertIsNotNone(order.order_id)
-
-        # Save the order_id before expiring the session
         order_id = order.order_id
 
-        # Force SQLAlchemy to reload data from the database
         db.session.expire_all()
-
-        # Fetch the Order back
         found_order = Order.find_by_order_id(order_id)
 
         self.assertIsNotNone(found_order)
         self.assertEqual(len(found_order.items), 1)
 
-        # Verify the OrderItem was persisted with the Order
         found_item = found_order.items[0]
-
-        self.assertEqual(
-            found_item.product_id,
-            order_item.product_id,
-        )
-        self.assertEqual(
-            found_item.quantity,
-            order_item.quantity,
-        )
-        self.assertEqual(
-            found_item.price,
-            order_item.price,
-        )
-        self.assertEqual(
-            found_item.order_id,
-            found_order.order_id,
-        )
+        self.assertEqual(found_item.product_id, order_item.product_id)
+        self.assertEqual(found_item.quantity, order_item.quantity)
+        self.assertEqual(found_item.price, order_item.price)
+        self.assertEqual(found_item.order_id, found_order.order_id)
 
     def test_find_by_status(self):
         """It should Find Orders by status"""
@@ -393,6 +333,212 @@ class TestOrderModel(TestCase):
         orders = Order.find_by_status("pending")
 
         self.assertEqual(len(orders), 2)
-
         for order in orders:
             self.assertEqual(order.status, "pending")
+
+    def test_deserialize_valid_order_data(self):
+        """Scenario: Deserialize valid Order data populates model successfully"""
+        valid_payload = {
+            "customer_id": 101,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "99.99",
+            "items": [{"product_id": 5, "quantity": 2, "price": "49.99"}],
+        }
+
+        order = Order()
+        order.deserialize(valid_payload)
+
+        self.assertEqual(order.customer_id, 101)
+        self.assertEqual(order.status, "pending")
+        self.assertEqual(len(order.items), 1)
+
+    def test_deserialize_rejects_negative_customer_id(self):
+        """Reject negative customer_id during deserialization"""
+        bad_payload = {
+            "customer_id": -5,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "10.00",
+            "items": [],
+        }
+
+        order = Order()
+        self.assertRaises(DataValidationError, order.deserialize, bad_payload)
+
+    def test_deserialize_rejects_invalid_status(self):
+        """Reject invalid status value"""
+        bad_payload = {
+            "customer_id": 101,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "fake_status",
+            "total_amount": "10.00",
+            "items": [],
+        }
+
+        order = Order()
+        self.assertRaises(DataValidationError, order.deserialize, bad_payload)
+
+    def test_deserialize_rejects_negative_total_amount(self):
+        """Reject negative total_amount value"""
+        bad_payload = {
+            "customer_id": 101,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "-50.00",
+            "items": [],
+        }
+
+        order = Order()
+        self.assertRaises(DataValidationError, order.deserialize, bad_payload)
+
+    def test_deserialize_rejects_items_not_list(self):
+        """Reject items field that is not a list"""
+        bad_payload = {
+            "customer_id": 101,
+            "order_date": "2026-10-20T12:00:00",
+            "status": "pending",
+            "total_amount": "10.00",
+            "items": "this-is-not-a-list",
+        }
+
+        order = Order()
+        self.assertRaises(DataValidationError, order.deserialize, bad_payload)
+
+    def test_deserialize_accepts_datetime_order_date(self):
+        """Accept a datetime object for order_date."""
+        order_date = datetime.now()
+        order = Order()
+
+        order.deserialize(
+            {
+                "customer_id": 101,
+                "order_date": order_date,
+                "items": [],
+            }
+        )
+
+        self.assertEqual(order.order_date, order_date)
+
+    def test_deserialize_rejects_invalid_order_date_type(self):
+        """Reject an order_date that is neither a string nor datetime."""
+        order = Order()
+
+        with self.assertRaises(DataValidationError):
+            order.deserialize(
+                {
+                    "customer_id": 101,
+                    "order_date": 123,
+                    "items": [],
+                }
+            )
+
+    def test_deserialize_rejects_malformed_order_date(self):
+        """Reject an invalid ISO-format order_date."""
+        order = Order()
+
+        with self.assertRaises(DataValidationError):
+            order.deserialize(
+                {
+                    "customer_id": 101,
+                    "order_date": "not-a-date",
+                    "items": [],
+                }
+            )
+
+    def test_deserialize_rejects_boolean_product_id(self):
+        """Reject a boolean product_id."""
+        order = Order()
+
+        with self.assertRaises(DataValidationError):
+            order.deserialize(
+                {
+                    "customer_id": 101,
+                    "items": [
+                        {
+                            "product_id": True,
+                            "quantity": 1,
+                            "price": "1.00",
+                        }
+                    ],
+                }
+            )
+
+    def test_deserialize_rejects_non_integer_quantity(self):
+        """Reject a quantity that cannot be converted to an integer."""
+        order = Order()
+
+        with self.assertRaises(DataValidationError):
+            order.deserialize(
+                {
+                    "customer_id": 101,
+                    "items": [
+                        {
+                            "product_id": 1,
+                            "quantity": "many",
+                            "price": "1.00",
+                        }
+                    ],
+                }
+            )
+
+    def test_deserialize_rejects_unparseable_item_price(self):
+        """Reject a price that cannot be converted to Decimal."""
+        order = Order()
+
+        with self.assertRaises(DataValidationError):
+            order.deserialize(
+                {
+                    "customer_id": 101,
+                    "items": [
+                        {
+                            "product_id": 1,
+                            "quantity": 1,
+                            "price": "not-a-price",
+                        }
+                    ],
+                }
+            )
+
+    def test_deserialize_rejects_negative_item_price(self):
+        """Reject a negative item price."""
+        order = Order()
+
+        with self.assertRaises(DataValidationError):
+            order.deserialize(
+                {
+                    "customer_id": 101,
+                    "items": [
+                        {
+                            "product_id": 1,
+                            "quantity": 1,
+                            "price": "-1.00",
+                        }
+                    ],
+                }
+            )
+
+    def test_deserialize_rejects_non_object_item(self):
+        """Reject an item that is not a dictionary."""
+        order = Order()
+
+        with self.assertRaises(DataValidationError):
+            order.deserialize(
+                {
+                    "customer_id": 101,
+                    "items": ["not-an-item-object"],
+                }
+            )
+
+    def test_deserialize_rejects_unparseable_total_amount(self):
+        """Reject a total_amount that cannot be converted to Decimal."""
+        order = Order()
+
+        with self.assertRaises(DataValidationError):
+            order.deserialize(
+                {
+                    "customer_id": 101,
+                    "items": [],
+                    "total_amount": "not-a-total",
+                }
+            )
