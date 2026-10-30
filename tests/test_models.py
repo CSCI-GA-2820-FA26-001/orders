@@ -548,3 +548,30 @@ class TestOrderModel(TestCase):
                     "total_amount": "not-a-total",
                 }
             )
+
+    def test_deserialize_partial_total_amount(self):
+        """Partial deserialization updates total and preserves other fields."""
+        order = Order()
+        order.deserialize(
+            {
+                "customer_id": 123,
+                "status": "processing",
+                "items": [
+                    {"product_id": 1001, "quantity": 2, "price": "10.50"},
+                ],
+            }
+        )
+
+        original_order_date = order.order_date
+        original_items = list(order.items)
+
+        order.deserialize(
+            {"total_amount": "25.75"},
+            partial=True,
+        )
+
+        self.assertEqual(str(order.total_amount), "25.75")
+        self.assertEqual(order.customer_id, 123)
+        self.assertEqual(order.status, "processing")
+        self.assertEqual(order.order_date, original_order_date)
+        self.assertEqual(order.items, original_items)
