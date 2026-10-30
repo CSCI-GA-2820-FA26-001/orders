@@ -203,16 +203,15 @@ class Order(db.Model, PersistentBase):
             )
         return total
 
-    def deserialize(self, data: dict, partial: bool = False) -> None:
-        """Populate this Order from a dictionary and validate its data."""
-        if not isinstance(data, dict):
-            raise DataValidationError("Invalid Order data: expected a dictionary")
-
+    def _deserialize_customer_id(self, data: dict, partial: bool) -> None:
+        """Deserialize and validate the customer ID."""
         if "customer_id" in data:
             self.customer_id = self._validate_customer_id(data["customer_id"])
         elif not partial:
             raise DataValidationError("Invalid Order: missing customer_id")
 
+    def _deserialize_order_metadata(self, data: dict, partial: bool) -> None:
+        """Deserialize the order date and status."""
         if "order_date" in data:
             self.order_date = self._parse_order_date(data["order_date"])
         elif not partial:
@@ -223,6 +222,8 @@ class Order(db.Model, PersistentBase):
         elif not partial:
             self.status = self._validate_status("pending")
 
+    def _deserialize_items_and_total(self, data: dict, partial: bool) -> None:
+        """Deserialize items and calculate or validate the order total."""
         if "items" in data:
             calculated_total = self._deserialize_items(data["items"])
             self.total_amount = self._parse_total_amount(
@@ -236,11 +237,19 @@ class Order(db.Model, PersistentBase):
                 calculated_total,
             )
         elif "total_amount" in data:
-
             self.total_amount = self._parse_total_amount(
                 data["total_amount"],
                 Decimal(str(self.total_amount or "0.00")),
             )
+
+    def deserialize(self, data: dict, partial: bool = False) -> None:
+        """Populate this Order from a dictionary and validate its data."""
+        if not isinstance(data, dict):
+            raise DataValidationError("Invalid Order data: expected a dictionary")
+
+        self._deserialize_customer_id(data, partial)
+        self._deserialize_order_metadata(data, partial)
+        self._deserialize_items_and_total(data, partial)
 
     @classmethod
     def find_by_order_id(cls, order_id):

@@ -421,7 +421,6 @@ def update_order_item(order_id, item_id):
     return jsonify(item.serialize()), status.HTTP_200_OK
 
 
-
 ######################################################################
 # DELETE AN ITEM FROM AN ORDER
 ######################################################################
