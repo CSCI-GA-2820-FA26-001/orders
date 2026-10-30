@@ -203,26 +203,44 @@ class Order(db.Model, PersistentBase):
             )
         return total
 
-    def deserialize(self, data: dict) -> None:
+    def deserialize(self, data: dict, partial: bool = False) -> None:
         """Populate this Order from a dictionary and validate its data."""
         if not isinstance(data, dict):
             raise DataValidationError("Invalid Order data: expected a dictionary")
 
-        try:
+        if "customer_id" in data:
             self.customer_id = self._validate_customer_id(data["customer_id"])
-        except KeyError as error:
-            raise DataValidationError(
-                f"Invalid Order: missing {error.args[0]}"
-            ) from error
+        elif not partial:
+            raise DataValidationError("Invalid Order: missing customer_id")
 
-        self.order_date = self._parse_order_date(data.get("order_date"))
-        self.status = self._validate_status(data.get("status", "pending"))
+        if "order_date" in data:
+            self.order_date = self._parse_order_date(data["order_date"])
+        elif not partial:
+            self.order_date = self._parse_order_date(None)
 
-        calculated_total = self._deserialize_items(data.get("items", []))
-        self.total_amount = self._parse_total_amount(
-            data.get("total_amount"),
-            calculated_total,
-        )
+        if "status" in data:
+            self.status = self._validate_status(data["status"])
+        elif not partial:
+            self.status = self._validate_status("pending")
+
+        if "items" in data:
+            calculated_total = self._deserialize_items(data["items"])
+            self.total_amount = self._parse_total_amount(
+                data.get("total_amount"),
+                calculated_total,
+            )
+        elif not partial:
+            calculated_total = self._deserialize_items([])
+            self.total_amount = self._parse_total_amount(
+                data.get("total_amount"),
+                calculated_total,
+            )
+        elif "total_amount" in data:
+
+            self.total_amount = self._parse_total_amount(
+                data["total_amount"],
+                Decimal(str(self.total_amount or "0.00")),
+            )
 
     @classmethod
     def find_by_order_id(cls, order_id):

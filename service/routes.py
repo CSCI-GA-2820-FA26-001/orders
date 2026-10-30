@@ -48,28 +48,24 @@ def index():
 ######################################################################
 @app.route("/orders", methods=["POST"])
 def create_order():
-    """Creates a new Order"""
-
+    """Create a new Order."""
     app.logger.info("Request to create an Order")
 
     data = request.get_json(silent=True)
 
-    # Basic HTTP‑level check: no payload
-    if not data:
+    if data is None:
         abort(
             status.HTTP_400_BAD_REQUEST,
-            "No request data was provided",
+            "A JSON request body is required.",
         )
 
-    # All business validation moved into Order.deserialize()
     try:
         order = Order()
         order.deserialize(data)
         order.create()
-    except DataValidationError as err:
-        abort(status.HTTP_400_BAD_REQUEST, str(err))
+    except DataValidationError as error:
+        abort(status.HTTP_400_BAD_REQUEST, str(error))
 
-    # Return newly created Order
     response = jsonify(order.serialize())
     response.status_code = status.HTTP_201_CREATED
     response.headers["Location"] = f"/orders/{order.id}"
@@ -386,11 +382,7 @@ def validate_item_payload(data):
 
 @app.route("/orders/<int:order_id>/items/<int:item_id>", methods=["PUT"])
 def update_order_item(order_id, item_id):
-    """
-    Update an Item in an Order
-
-    This endpoint will update an OrderItem based on its id and the id of its Order
-    """
+    """Update an item in an existing Order."""
     app.logger.info(
         "Request to Update item with id [%s] in order with id [%s]",
         item_id,
@@ -411,20 +403,23 @@ def update_order_item(order_id, item_id):
             f"Item with id '{item_id}' was not found in Order '{order_id}'.",
         )
 
-    product_id, quantity, price = validate_item_payload(request.get_json(silent=True))
+    product_id, quantity, price = validate_item_payload(
+        request.get_json(silent=True)
+    )
 
     item.product_id = product_id
     item.quantity = quantity
     item.price = price
 
-    # The Item and the Order total are saved in one transaction
     order.total_amount = sum(
-        (i.price * i.quantity for i in order.items), Decimal("0.00")
+        (order_item.price * order_item.quantity for order_item in order.items),
+        Decimal("0.00"),
     )
     order.update()
 
     app.logger.info("Item with id [%s] has been updated", item_id)
     return jsonify(item.serialize()), status.HTTP_200_OK
+
 
 
 ######################################################################
