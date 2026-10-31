@@ -336,6 +336,12 @@ class TestOrderModel(TestCase):
         for order in orders:
             self.assertEqual(order.status, "pending")
 
+    def test_find_by_status_returns_empty_list_when_no_matches(self):
+        """It should return an empty list when no orders match the status."""
+        orders = Order.find_by_status("cancelled")
+
+        self.assertEqual(orders, [])
+
     def test_deserialize_valid_order_data(self):
         """Scenario: Deserialize valid Order data populates model successfully"""
         valid_payload = {
