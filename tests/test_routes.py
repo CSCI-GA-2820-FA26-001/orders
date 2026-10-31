@@ -429,6 +429,75 @@ class TestOrderService(TestCase):
         self.assertEqual(second.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(second.data, b"")
 
+    def _create_order_with_status(self, order_status):
+        """Creates an Order through the API and sets its status"""
+        create_resp = self.client.post(
+            "/orders",
+            json={
+                "customer_id": 123,
+                "items": [
+                    {
+                        "product_id": 1001,
+                        "quantity": 2,
+                        "price": "10.50",
+                    }
+                ],
+            },
+        )
+        self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
+        order_id = create_resp.get_json()["order_id"]
+
+        order = Order.find(order_id)
+        order.status = order_status
+        order.update()
+        return order_id
+
+    def test_cancel_order(self):
+        """It should Cancel a pending Order"""
+        order_id = self._create_order_with_status("pending")
+
+        resp = self.client.put(f"/orders/{order_id}/cancel")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["order_id"], order_id)
+        self.assertEqual(data["status"], "cancelled")
+        self.assertEqual(len(data["items"]), 1)
+
+        saved_order = Order.find(order_id)
+        self.assertEqual(saved_order.status, "cancelled")
+
+    def test_cancel_order_not_found(self):
+        """It should return 404 when cancelling an Order that does not exist"""
+        resp = self.client.put("/orders/0/cancel")
+
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(resp.is_json)
+
+        data = resp.get_json()
+        self.assertEqual(data["error"], "Not Found")
+        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+
+    def test_cancel_order_not_pending(self):
+        """It should not Cancel an Order that is not pending"""
+        for order_status in ("processing", "shipped", "delivered", "cancelled"):
+            with self.subTest(status=order_status):
+                order_id = self._create_order_with_status(order_status)
+
+                resp = self.client.put(f"/orders/{order_id}/cancel")
+
+                self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
+                self.assertTrue(resp.is_json)
+
+                data = resp.get_json()
+                self.assertEqual(data["error"], "Conflict")
+                self.assertEqual(data["status"], status.HTTP_409_CONFLICT)
+
+                saved_order = Order.find(order_id)
+                self.assertEqual(saved_order.status, order_status)
+
     def test_update_order(self):
         """It should update the customer_id of an existing Order"""
         create_resp = self.client.post(
