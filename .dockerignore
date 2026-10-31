@@ -1,0 +1,11 @@
+.git
+.github
+.devcontainer
+.pytest_cache
+.coverage
+.env
+**/__pycache__
+**/*.pyc
+tests
+k8s
+config
