@@ -210,6 +210,39 @@ def delete_order(order_id):
 
 
 ######################################################################
+# CANCEL AN ORDER
+######################################################################
+@app.route("/orders/<int:order_id>/cancel", methods=["PUT"])
+def cancel_order(order_id):
+    """
+    Cancel an Order
+
+    This action changes the status of a pending Order to cancelled.
+    Orders in any other status cannot be cancelled.
+    """
+    app.logger.info("Request to cancel Order with id [%s]", order_id)
+
+    order = Order.find_by_order_id(order_id)
+    if not order:
+        abort(
+            status.HTTP_404_NOT_FOUND,
+            f"Order with id '{order_id}' was not found.",
+        )
+
+    if order.status != "pending":
+        abort(
+            status.HTTP_409_CONFLICT,
+            f"Order with id '{order_id}' is '{order.status}' and cannot be cancelled.",
+        )
+
+    order.status = "cancelled"
+    order.update()
+
+    app.logger.info("Order with id [%s] has been cancelled", order_id)
+    return jsonify(order.serialize()), status.HTTP_200_OK
+
+
+######################################################################
 # ADD AN ITEM TO AN ORDER
 ######################################################################
 @app.route("/orders/<int:order_id>/items", methods=["POST"])

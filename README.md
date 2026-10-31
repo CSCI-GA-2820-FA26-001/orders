@@ -44,6 +44,7 @@ Deleting an order also deletes its items.
 | `GET` | `/orders/{order_id}` | Read an order | `200 OK` |
 | `PUT` | `/orders/{order_id}` | Update an order's `customer_id` | `200 OK` |
 | `DELETE` | `/orders/{order_id}` | Delete an order and its items | `204 No Content` |
+| `PUT` | `/orders/{order_id}/cancel` | Cancel a `pending` order (`409 Conflict` otherwise) | `200 OK` |
 | `POST` | `/orders/{order_id}/items` | Add an item to an order | `201 Created` |
 | `GET` | `/orders/{order_id}/items` | List the items of an order | `200 OK` |
 | `GET` | `/orders/{order_id}/items/{item_id}` | Read an item of an order | `200 OK` |
