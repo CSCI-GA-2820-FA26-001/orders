@@ -85,6 +85,13 @@ class TestOrderService(TestCase):
         self.assertEqual(data["version"], "1.0")
         self.assertEqual(data["list_url"], "/orders")
 
+    def test_health(self):
+        """It should report that the service is healthy"""
+        resp = self.client.get("/health")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.content_type, "application/json")
+        self.assertEqual(resp.get_json(), {"status": "OK"})
+
     def test_bad_request(self):
         """It should return 400 Bad Request"""
         with patch.dict(

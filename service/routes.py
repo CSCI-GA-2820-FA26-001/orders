@@ -28,6 +28,15 @@ from service.models import Order, OrderItem, DataValidationError
 
 
 ######################################################################
+# GET HEALTH CHECK
+######################################################################
+@app.route("/health")
+def health():
+    """Let Kubernetes know the service is running"""
+    return jsonify(status="OK"), status.HTTP_200_OK
+
+
+######################################################################
 # GET INDEX
 ######################################################################
 @app.route("/")
