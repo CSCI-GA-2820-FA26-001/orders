@@ -177,7 +177,7 @@ class TestOrderService(TestCase):
         self.assertIn("Location", resp.headers)
         self.assertEqual(
             resp.headers["Location"],
-            f"/orders/{data['order_id']}",
+            f"http://localhost/orders/{data['order_id']}",
         )
 
         # Verify that the Order was saved
@@ -696,6 +696,10 @@ class TestOrderService(TestCase):
         self.assertEqual(item_data["product_id"], 1002)
         self.assertEqual(item_data["quantity"], 2)
         self.assertEqual(item_data["price"], "5.25")
+        self.assertEqual(
+            resp.headers["Location"],
+            f"http://localhost/orders/{order_id}/items/{item_data['id']}",
+        )
 
         saved_order = Order.find(order_id)
         self.assertEqual(len(saved_order.items), 2)
