@@ -22,5 +22,7 @@ spec:
             - name: PORT
               value: "8080"
             - name: DATABASE_URI
-              value: "postgresql+psycopg://postgres:postgres@postgres:5432/orders"
-              
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-creds
+                  key: database_uri
