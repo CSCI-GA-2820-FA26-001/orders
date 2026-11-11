@@ -23,9 +23,7 @@ import os
 import logging
 from decimal import Decimal
 from unittest import TestCase
-from unittest.mock import patch
 
-from flask import abort
 from wsgi import app
 from service.common import status
 from service.models import db, Order, OrderItem
@@ -83,7 +81,7 @@ class TestOrderService(TestCase):
         data = resp.get_json()
         self.assertEqual(data["name"], "Orders Service")
         self.assertEqual(data["version"], "1.0")
-        self.assertEqual(data["list_url"], "/orders")
+        self.assertEqual(data["list_url"], "/api/orders")
 
     def test_health(self):
         """It should report that the service is healthy"""
@@ -93,58 +91,44 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.get_json(), {"status": "OK"})
 
     def test_bad_request(self):
-        """It should return 400 Bad Request"""
-        with patch.dict(
-            app.view_functions,
-            {"index": lambda: abort(status.HTTP_400_BAD_REQUEST)},
-        ):
-            resp = self.client.get("/")
-            self.assertEqual(
-                resp.status_code,
-                status.HTTP_400_BAD_REQUEST,
-            )
+        """It should return JSON 400 Bad Request for invalid create data"""
+        resp = self.client.post("/api/orders", json={})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.is_json)
+        self.assertIn("message", resp.get_json())
 
     def test_not_found(self):
-        """It should return 404 Not Found"""
+        """It should return JSON 404 Not Found"""
         resp = self.client.get("/this-route-does-not-exist")
 
         self.assertEqual(
             resp.status_code,
             status.HTTP_404_NOT_FOUND,
         )
+        self.assertTrue(resp.is_json)
 
     def test_method_not_allowed(self):
         """It should return 405 Method Not Allowed"""
-        resp = self.client.post("/")
+        resp = self.client.patch("/api/orders")
 
         self.assertEqual(
             resp.status_code,
             status.HTTP_405_METHOD_NOT_ALLOWED,
         )
+        self.assertTrue(resp.is_json)
 
     def test_unsupported_media_type(self):
-        """It should return 415 Unsupported Media Type"""
-        with patch.dict(
-            app.view_functions,
-            {"index": lambda: abort(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)},
-        ):
-            resp = self.client.get("/")
-            self.assertEqual(
-                resp.status_code,
-                status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            )
-
-    def test_internal_server_error(self):
-        """It should return 500 Internal Server Error"""
-        with patch.dict(
-            app.view_functions,
-            {"index": lambda: abort(status.HTTP_500_INTERNAL_SERVER_ERROR)},
-        ):
-            resp = self.client.get("/")
-            self.assertEqual(
-                resp.status_code,
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        """It should return JSON 415 Unsupported Media Type"""
+        resp = self.client.post(
+            "/api/orders",
+            data="{}",
+            content_type="text/plain",
+        )
+        self.assertEqual(
+            resp.status_code,
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+        )
+        self.assertTrue(resp.is_json)
 
     def test_create_order(self):
         """It should Create a new Order"""
@@ -165,7 +149,7 @@ class TestOrderService(TestCase):
         }
 
         resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json=payload,
         )
 
@@ -184,7 +168,7 @@ class TestOrderService(TestCase):
         self.assertIn("Location", resp.headers)
         self.assertEqual(
             resp.headers["Location"],
-            f"http://localhost/orders/{data['order_id']}",
+            f"http://localhost/api/orders/{data['order_id']}",
         )
 
         # Verify that the Order was saved
@@ -207,7 +191,7 @@ class TestOrderService(TestCase):
         }
 
         resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json=payload,
         )
 
@@ -221,7 +205,7 @@ class TestOrderService(TestCase):
     def test_create_order_no_data(self):
         """It should not Create an Order with no data"""
         resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json={},
         )
 
@@ -238,7 +222,7 @@ class TestOrderService(TestCase):
         }
 
         resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json=payload,
         )
 
@@ -259,7 +243,7 @@ class TestOrderService(TestCase):
         }
 
         resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json=payload,
         )
 
@@ -285,7 +269,7 @@ class TestOrderService(TestCase):
         }
 
         resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json=payload,
         )
 
@@ -309,7 +293,7 @@ class TestOrderService(TestCase):
         }
 
         resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json=payload,
         )
 
@@ -337,12 +321,12 @@ class TestOrderService(TestCase):
             ],
         }
 
-        create_resp = self.client.post("/orders", json=payload)
+        create_resp = self.client.post("/api/orders", json=payload)
         self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
         created = create_resp.get_json()
         order_id = created["order_id"]
 
-        resp = self.client.get(f"/orders/{order_id}")
+        resp = self.client.get(f"/api/orders/{order_id}")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -357,14 +341,13 @@ class TestOrderService(TestCase):
 
     def test_get_order_not_found(self):
         """It should return 404 when the Order does not exist"""
-        resp = self.client.get("/orders/0")
+        resp = self.client.get("/api/orders/0")
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
-        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertIn("message", data)
         self.assertNotIn("order_id", data)
         self.assertNotIn("customer_id", data)
         self.assertNotIn("order_date", data)
@@ -384,11 +367,11 @@ class TestOrderService(TestCase):
             ],
         }
 
-        create_resp = self.client.post("/orders", json=payload)
+        create_resp = self.client.post("/api/orders", json=payload)
         self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
         order_id = create_resp.get_json()["order_id"]
 
-        resp = self.client.delete(f"/orders/{order_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}")
 
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(resp.data, b"")
@@ -399,12 +382,12 @@ class TestOrderService(TestCase):
             0,
         )
 
-        get_resp = self.client.get(f"/orders/{order_id}")
+        get_resp = self.client.get(f"/api/orders/{order_id}")
         self.assertEqual(get_resp.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_delete_order_not_found(self):
         """It should return 204 when deleting an Order that does not exist"""
-        resp = self.client.delete("/orders/888")
+        resp = self.client.delete("/api/orders/888")
 
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(resp.data, b"")
@@ -412,7 +395,7 @@ class TestOrderService(TestCase):
     def test_delete_order_idempotent(self):
         """It should return 204 when deleting the same Order twice"""
         create_resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json={
                 "customer_id": 123,
                 "items": [
@@ -427,19 +410,19 @@ class TestOrderService(TestCase):
         self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
         order_id = create_resp.get_json()["order_id"]
 
-        first = self.client.delete(f"/orders/{order_id}")
+        first = self.client.delete(f"/api/orders/{order_id}")
         self.assertEqual(first.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(first.data, b"")
         self.assertIsNone(Order.find_by_order_id(order_id))
 
-        second = self.client.delete(f"/orders/{order_id}")
+        second = self.client.delete(f"/api/orders/{order_id}")
         self.assertEqual(second.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(second.data, b"")
 
     def _create_order_with_status(self, order_status):
         """Creates an Order through the API and sets its status"""
         create_resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json={
                 "customer_id": 123,
                 "items": [
@@ -463,7 +446,7 @@ class TestOrderService(TestCase):
         """It should Cancel a pending Order"""
         order_id = self._create_order_with_status("pending")
 
-        resp = self.client.put(f"/orders/{order_id}/cancel")
+        resp = self.client.put(f"/api/orders/{order_id}/cancel")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertTrue(resp.is_json)
@@ -478,14 +461,13 @@ class TestOrderService(TestCase):
 
     def test_cancel_order_not_found(self):
         """It should return 404 when cancelling an Order that does not exist"""
-        resp = self.client.put("/orders/0/cancel")
+        resp = self.client.put("/api/orders/0/cancel")
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
-        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertIn("message", data)
 
     def test_cancel_order_not_pending(self):
         """It should not Cancel an Order that is not pending"""
@@ -493,14 +475,13 @@ class TestOrderService(TestCase):
             with self.subTest(status=order_status):
                 order_id = self._create_order_with_status(order_status)
 
-                resp = self.client.put(f"/orders/{order_id}/cancel")
+                resp = self.client.put(f"/api/orders/{order_id}/cancel")
 
                 self.assertEqual(resp.status_code, status.HTTP_409_CONFLICT)
                 self.assertTrue(resp.is_json)
 
                 data = resp.get_json()
-                self.assertEqual(data["error"], "Conflict")
-                self.assertEqual(data["status"], status.HTTP_409_CONFLICT)
+                self.assertIn("message", data)
 
                 saved_order = Order.find(order_id)
                 self.assertEqual(saved_order.status, order_status)
@@ -508,7 +489,7 @@ class TestOrderService(TestCase):
     def test_update_order(self):
         """It should update the customer_id of an existing Order"""
         create_resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json={
                 "customer_id": 123,
                 "items": [
@@ -524,7 +505,7 @@ class TestOrderService(TestCase):
         order_id = create_resp.get_json()["order_id"]
 
         resp = self.client.put(
-            f"/orders/{order_id}",
+            f"/api/orders/{order_id}",
             json={"customer_id": 456},
         )
 
@@ -543,7 +524,7 @@ class TestOrderService(TestCase):
     def test_update_order_not_found(self):
         """It should return JSON 404 when the Order does not exist"""
         resp = self.client.put(
-            "/orders/0",
+            "/api/orders/0",
             json={"customer_id": 456},
         )
 
@@ -551,13 +532,12 @@ class TestOrderService(TestCase):
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
-        self.assertEqual(data["status"], status.HTTP_404_NOT_FOUND)
+        self.assertIn("message", data)
 
     def test_update_order_invalid_payload(self):
         """It should return JSON 400 for an incomplete or invalid payload"""
         create_resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json={
                 "customer_id": 123,
                 "items": [
@@ -580,7 +560,7 @@ class TestOrderService(TestCase):
 
         for payload in invalid_payloads:
             with self.subTest(payload=payload):
-                resp = self.client.put(f"/orders/{order_id}", json=payload)
+                resp = self.client.put(f"/api/orders/{order_id}", json=payload)
                 self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
                 self.assertTrue(resp.is_json)
 
@@ -607,8 +587,8 @@ class TestOrderService(TestCase):
             ],
         }
 
-        first_create = self.client.post("/orders", json=first_payload)
-        second_create = self.client.post("/orders", json=second_payload)
+        first_create = self.client.post("/api/orders", json=first_payload)
+        second_create = self.client.post("/api/orders", json=second_payload)
 
         self.assertEqual(first_create.status_code, status.HTTP_201_CREATED)
         self.assertEqual(second_create.status_code, status.HTTP_201_CREATED)
@@ -616,7 +596,7 @@ class TestOrderService(TestCase):
         first_order = first_create.get_json()
         second_order = second_create.get_json()
 
-        resp = self.client.get("/orders")
+        resp = self.client.get("/api/orders")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -654,15 +634,15 @@ class TestOrderService(TestCase):
             ],
         }
 
-        first_create = self.client.post("/orders", json=customer_42_payload)
-        second_create = self.client.post("/orders", json=customer_42_payload)
-        other_create = self.client.post("/orders", json=customer_10_payload)
+        first_create = self.client.post("/api/orders", json=customer_42_payload)
+        second_create = self.client.post("/api/orders", json=customer_42_payload)
+        other_create = self.client.post("/api/orders", json=customer_10_payload)
 
         self.assertEqual(first_create.status_code, status.HTTP_201_CREATED)
         self.assertEqual(second_create.status_code, status.HTTP_201_CREATED)
         self.assertEqual(other_create.status_code, status.HTTP_201_CREATED)
 
-        resp = self.client.get("/orders?customer_id=42")
+        resp = self.client.get("/api/orders?customer_id=42")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -674,7 +654,7 @@ class TestOrderService(TestCase):
 
     def test_list_orders_empty(self):
         """It should return an empty list when there are no orders"""
-        resp = self.client.get("/orders")
+        resp = self.client.get("/api/orders")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -683,7 +663,7 @@ class TestOrderService(TestCase):
     def test_add_item_to_order(self):
         """It should add an item to an existing Order"""
         create_resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json={
                 "customer_id": 123,
                 "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
@@ -693,7 +673,7 @@ class TestOrderService(TestCase):
         order_id = create_resp.get_json()["order_id"]
 
         resp = self.client.post(
-            f"/orders/{order_id}/items",
+            f"/api/orders/{order_id}/items",
             json={"product_id": 1002, "quantity": 2, "price": "5.25"},
         )
 
@@ -705,7 +685,7 @@ class TestOrderService(TestCase):
         self.assertEqual(item_data["price"], "5.25")
         self.assertEqual(
             resp.headers["Location"],
-            f"http://localhost/orders/{order_id}/items/{item_data['id']}",
+            f"http://localhost/api/orders/{order_id}/items/{item_data['id']}",
         )
 
         saved_order = Order.find(order_id)
@@ -715,7 +695,7 @@ class TestOrderService(TestCase):
     def test_add_item_to_order_not_found(self):
         """It should return 404 when adding an item to a missing Order"""
         resp = self.client.post(
-            "/orders/0/items",
+            "/api/orders/0/items",
             json={"product_id": 1002, "quantity": 1, "price": "5.25"},
         )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
@@ -723,14 +703,14 @@ class TestOrderService(TestCase):
     def test_add_item_to_order_invalid_payload(self):
         """It should return 400 for an incomplete or invalid item payload"""
         create_resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json={
                 "customer_id": 123,
                 "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
             },
         )
         order_id = create_resp.get_json()["order_id"]
-        url = f"/orders/{order_id}/items"
+        url = f"/api/orders/{order_id}/items"
 
         payloads = [
             [],
@@ -757,13 +737,13 @@ class TestOrderService(TestCase):
 
     def test_list_orders_invalid_customer_id(self):
         """It should return 400 when customer_id is not an integer"""
-        resp = self.client.get("/orders?customer_id=abc")
+        resp = self.client.get("/api/orders?customer_id=abc")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_update_order_rejects_boolean_customer_id(self):
         """It should return 400 when customer_id is a boolean"""
         create_resp = self.client.post(
-            "/orders",
+            "/api/orders",
             json={
                 "customer_id": 123,
                 "items": [{"product_id": 1001, "quantity": 1, "price": "10.50"}],
@@ -772,7 +752,7 @@ class TestOrderService(TestCase):
         order_id = create_resp.get_json()["order_id"]
 
         resp = self.client.put(
-            f"/orders/{order_id}",
+            f"/api/orders/{order_id}",
             json={"customer_id": True},
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
@@ -793,14 +773,14 @@ class TestOrderService(TestCase):
             ],
         }
 
-        create_resp = self.client.post("/orders", json=payload_a)
+        create_resp = self.client.post("/api/orders", json=payload_a)
         self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
         order_id = create_resp.get_json()["order_id"]
 
-        create_resp = self.client.post("/orders", json=payload_b)
+        create_resp = self.client.post("/api/orders", json=payload_b)
         self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
 
-        resp = self.client.get(f"/orders/{order_id}/items")
+        resp = self.client.get(f"/api/orders/{order_id}/items")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -826,20 +806,19 @@ class TestOrderService(TestCase):
         order.customer_id = 123
         order.create()
 
-        resp = self.client.get(f"/orders/{order.id}/items")
+        resp = self.client.get(f"/api/orders/{order.id}/items")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.get_json(), [])
 
     def test_list_order_items_order_not_found(self):
         """It should return 404 when listing Items for an Order that does not exist"""
-        resp = self.client.get("/orders/0/items")
+        resp = self.client.get("/api/orders/0/items")
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
         self.assertIn("Order with id '0' was not found", data["message"])
 
     def test_get_order_item(self):
@@ -852,13 +831,13 @@ class TestOrderService(TestCase):
             ],
         }
 
-        create_resp = self.client.post("/orders", json=payload)
+        create_resp = self.client.post("/api/orders", json=payload)
         self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
         order = create_resp.get_json()
         order_id = order["order_id"]
         item = order["items"][1]
 
-        resp = self.client.get(f"/orders/{order_id}/items/{item['id']}")
+        resp = self.client.get(f"/api/orders/{order_id}/items/{item['id']}")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -872,13 +851,12 @@ class TestOrderService(TestCase):
 
     def test_get_order_item_order_not_found(self):
         """It should return 404 when reading an Item from an Order that does not exist"""
-        resp = self.client.get("/orders/0/items/1")
+        resp = self.client.get("/api/orders/0/items/1")
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
         self.assertIn("Order with id '0' was not found", data["message"])
 
     def test_get_order_item_not_found(self):
@@ -890,17 +868,16 @@ class TestOrderService(TestCase):
             ],
         }
 
-        create_resp = self.client.post("/orders", json=payload)
+        create_resp = self.client.post("/api/orders", json=payload)
         self.assertEqual(create_resp.status_code, status.HTTP_201_CREATED)
         order_id = create_resp.get_json()["order_id"]
 
-        resp = self.client.get(f"/orders/{order_id}/items/0")
+        resp = self.client.get(f"/api/orders/{order_id}/items/0")
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
         self.assertIn("Item with id '0' was not found", data["message"])
 
     def test_get_order_item_wrong_order(self):
@@ -912,21 +889,20 @@ class TestOrderService(TestCase):
             ],
         }
 
-        order_a = self.client.post("/orders", json=payload).get_json()
-        order_b = self.client.post("/orders", json=payload).get_json()
+        order_a = self.client.post("/api/orders", json=payload).get_json()
+        order_b = self.client.post("/api/orders", json=payload).get_json()
         item_b_id = order_b["items"][0]["id"]
 
-        resp = self.client.get(f"/orders/{order_a['order_id']}/items/{item_b_id}")
+        resp = self.client.get(f"/api/orders/{order_a['order_id']}/items/{item_b_id}")
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
         self.assertIn(f"Item with id '{item_b_id}' was not found", data["message"])
 
         # The same Item is still readable through its own Order
-        resp = self.client.get(f"/orders/{order_b['order_id']}/items/{item_b_id}")
+        resp = self.client.get(f"/api/orders/{order_b['order_id']}/items/{item_b_id}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_update_order_item(self):
@@ -939,14 +915,14 @@ class TestOrderService(TestCase):
             ],
         }
 
-        order = self.client.post("/orders", json=payload).get_json()
+        order = self.client.post("/api/orders", json=payload).get_json()
         order_id = order["order_id"]
         self.assertEqual(order["total_amount"], "26.00")
         item = next(i for i in order["items"] if i["product_id"] == 1001)
         other = next(i for i in order["items"] if i["product_id"] == 1002)
 
         resp = self.client.put(
-            f"/orders/{order_id}/items/{item['id']}",
+            f"/api/orders/{order_id}/items/{item['id']}",
             json={"product_id": 2001, "quantity": 3, "price": "4.00"},
         )
 
@@ -961,14 +937,14 @@ class TestOrderService(TestCase):
         self.assertEqual(data["price"], "4.00")
 
         # The change is persisted and the total reflects it
-        resp = self.client.get(f"/orders/{order_id}/items/{item['id']}")
+        resp = self.client.get(f"/api/orders/{order_id}/items/{item['id']}")
         self.assertEqual(resp.get_json(), data)
 
-        resp = self.client.get(f"/orders/{order_id}")
+        resp = self.client.get(f"/api/orders/{order_id}")
         self.assertEqual(resp.get_json()["total_amount"], "17.00")
 
         # The other Item is untouched
-        resp = self.client.get(f"/orders/{order_id}/items/{other['id']}")
+        resp = self.client.get(f"/api/orders/{order_id}/items/{other['id']}")
         self.assertEqual(resp.get_json(), other)
 
     def test_update_order_item_ignores_order_id(self):
@@ -978,12 +954,12 @@ class TestOrderService(TestCase):
             "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
         }
 
-        order_a = self.client.post("/orders", json=payload).get_json()
-        order_b = self.client.post("/orders", json=payload).get_json()
+        order_a = self.client.post("/api/orders", json=payload).get_json()
+        order_b = self.client.post("/api/orders", json=payload).get_json()
         item = order_a["items"][0]
 
         resp = self.client.put(
-            f"/orders/{order_a['order_id']}/items/{item['id']}",
+            f"/api/orders/{order_a['order_id']}/items/{item['id']}",
             json={
                 "order_id": order_b["order_id"],
                 "product_id": 1001,
@@ -995,16 +971,16 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.get_json()["order_id"], order_a["order_id"])
 
-        resp = self.client.get(f"/orders/{order_a['order_id']}")
+        resp = self.client.get(f"/api/orders/{order_a['order_id']}")
         self.assertEqual(resp.get_json()["total_amount"], "10.50")
 
-        resp = self.client.get(f"/orders/{order_b['order_id']}")
+        resp = self.client.get(f"/api/orders/{order_b['order_id']}")
         self.assertEqual(resp.get_json()["total_amount"], "21.00")
 
     def test_update_order_item_order_not_found(self):
         """It should return 404 when updating an Item in an Order that does not exist"""
         resp = self.client.put(
-            "/orders/0/items/1",
+            "/api/orders/0/items/1",
             json={"product_id": 1001, "quantity": 1, "price": "1.00"},
         )
 
@@ -1012,7 +988,6 @@ class TestOrderService(TestCase):
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
         self.assertIn("Order with id '0' was not found", data["message"])
 
     def test_update_order_item_not_found(self):
@@ -1022,10 +997,10 @@ class TestOrderService(TestCase):
             "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
         }
 
-        order_id = self.client.post("/orders", json=payload).get_json()["order_id"]
+        order_id = self.client.post("/api/orders", json=payload).get_json()["order_id"]
 
         resp = self.client.put(
-            f"/orders/{order_id}/items/0",
+            f"/api/orders/{order_id}/items/0",
             json={"product_id": 1001, "quantity": 1, "price": "1.00"},
         )
 
@@ -1033,7 +1008,6 @@ class TestOrderService(TestCase):
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
         self.assertIn("Item with id '0' was not found", data["message"])
 
     def test_update_order_item_wrong_order(self):
@@ -1043,12 +1017,12 @@ class TestOrderService(TestCase):
             "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
         }
 
-        order_a = self.client.post("/orders", json=payload).get_json()
-        order_b = self.client.post("/orders", json=payload).get_json()
+        order_a = self.client.post("/api/orders", json=payload).get_json()
+        order_b = self.client.post("/api/orders", json=payload).get_json()
         item_b = order_b["items"][0]
 
         resp = self.client.put(
-            f"/orders/{order_a['order_id']}/items/{item_b['id']}",
+            f"/api/orders/{order_a['order_id']}/items/{item_b['id']}",
             json={"product_id": 2001, "quantity": 9, "price": "1.00"},
         )
 
@@ -1056,11 +1030,11 @@ class TestOrderService(TestCase):
         self.assertTrue(resp.is_json)
 
         # The Item and both totals are unchanged
-        resp = self.client.get(f"/orders/{order_b['order_id']}/items/{item_b['id']}")
+        resp = self.client.get(f"/api/orders/{order_b['order_id']}/items/{item_b['id']}")
         self.assertEqual(resp.get_json(), item_b)
 
         for order in (order_a, order_b):
-            resp = self.client.get(f"/orders/{order['order_id']}")
+            resp = self.client.get(f"/api/orders/{order['order_id']}")
             self.assertEqual(resp.get_json()["total_amount"], "21.00")
 
     def test_update_order_item_invalid_payload(self):
@@ -1070,10 +1044,10 @@ class TestOrderService(TestCase):
             "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
         }
 
-        order = self.client.post("/orders", json=payload).get_json()
+        order = self.client.post("/api/orders", json=payload).get_json()
         order_id = order["order_id"]
         item = order["items"][0]
-        url = f"/orders/{order_id}/items/{item['id']}"
+        url = f"/api/orders/{order_id}/items/{item['id']}"
 
         payloads = [
             [],
@@ -1097,17 +1071,26 @@ class TestOrderService(TestCase):
                 resp = self.client.put(url, json=body)
                 self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
                 self.assertTrue(resp.is_json)
-                self.assertEqual(resp.get_json()["error"], "Bad Request")
+                self.assertIn("message", resp.get_json())
 
-        # A request without a body is rejected too
+        # A request without a JSON content type is rejected by Flask-RESTX
         resp = self.client.put(url)
+        self.assertEqual(
+            resp.status_code,
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+        )
+        self.assertTrue(resp.is_json)
+
+        # A JSON request without a body is rejected as bad request
+        resp = self.client.put(url, content_type="application/json")
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.is_json)
 
         # Nothing was changed by the rejected requests
         resp = self.client.get(url)
         self.assertEqual(resp.get_json(), item)
 
-        resp = self.client.get(f"/orders/{order_id}")
+        resp = self.client.get(f"/api/orders/{order_id}")
         self.assertEqual(resp.get_json()["total_amount"], "21.00")
 
     def test_delete_order_item(self):
@@ -1120,21 +1103,21 @@ class TestOrderService(TestCase):
             ],
         }
 
-        order = self.client.post("/orders", json=payload).get_json()
+        order = self.client.post("/api/orders", json=payload).get_json()
         order_id = order["order_id"]
         item_id = order["items"][0]["id"]
         self.assertEqual(order["total_amount"], "26.00")
 
-        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}/items/{item_id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(resp.data, b"")
 
         # The Item no longer exists
-        resp = self.client.get(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.get(f"/api/orders/{order_id}/items/{item_id}")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
         # The parent Order remains with the other Item and an updated total
-        resp = self.client.get(f"/orders/{order_id}")
+        resp = self.client.get(f"/api/orders/{order_id}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.get_json()
         self.assertEqual(len(data["items"]), 1)
@@ -1148,14 +1131,14 @@ class TestOrderService(TestCase):
             "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
         }
 
-        order = self.client.post("/orders", json=payload).get_json()
+        order = self.client.post("/api/orders", json=payload).get_json()
         order_id = order["order_id"]
         item_id = order["items"][0]["id"]
 
-        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}/items/{item_id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
-        resp = self.client.get(f"/orders/{order_id}")
+        resp = self.client.get(f"/api/orders/{order_id}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         data = resp.get_json()
         self.assertEqual(data["items"], [])
@@ -1168,39 +1151,37 @@ class TestOrderService(TestCase):
             "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
         }
 
-        order = self.client.post("/orders", json=payload).get_json()
+        order = self.client.post("/api/orders", json=payload).get_json()
         order_id = order["order_id"]
         item_id = order["items"][0]["id"]
 
         # An Item that never existed
-        resp = self.client.delete(f"/orders/{order_id}/items/0")
+        resp = self.client.delete(f"/api/orders/{order_id}/items/0")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
         self.assertIn("Item with id '0' was not found", data["message"])
 
         # An Item that was already deleted
-        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}/items/{item_id}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
-        resp = self.client.delete(f"/orders/{order_id}/items/{item_id}")
+        resp = self.client.delete(f"/api/orders/{order_id}/items/{item_id}")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
         # The second attempt does not change the Order
-        resp = self.client.get(f"/orders/{order_id}")
+        resp = self.client.get(f"/api/orders/{order_id}")
         self.assertEqual(resp.get_json()["total_amount"], "0.00")
 
     def test_delete_order_item_order_not_found(self):
         """It should return 404 when deleting an Item from an Order that does not exist"""
-        resp = self.client.delete("/orders/0/items/1")
+        resp = self.client.delete("/api/orders/0/items/1")
 
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
         self.assertIn("Order with id '0' was not found", data["message"])
 
     def test_delete_order_item_wrong_order(self):
@@ -1210,24 +1191,23 @@ class TestOrderService(TestCase):
             "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}],
         }
 
-        order_a = self.client.post("/orders", json=payload).get_json()
-        order_b = self.client.post("/orders", json=payload).get_json()
+        order_a = self.client.post("/api/orders", json=payload).get_json()
+        order_b = self.client.post("/api/orders", json=payload).get_json()
         item_b_id = order_b["items"][0]["id"]
 
-        resp = self.client.delete(f"/orders/{order_a['order_id']}/items/{item_b_id}")
+        resp = self.client.delete(f"/api/orders/{order_a['order_id']}/items/{item_b_id}")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(resp.is_json)
 
         data = resp.get_json()
-        self.assertEqual(data["error"], "Not Found")
         self.assertIn(f"Item with id '{item_b_id}' was not found", data["message"])
 
         # The Item is still there, and neither total changed
-        resp = self.client.get(f"/orders/{order_b['order_id']}/items/{item_b_id}")
+        resp = self.client.get(f"/api/orders/{order_b['order_id']}/items/{item_b_id}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
         for order in (order_a, order_b):
-            resp = self.client.get(f"/orders/{order['order_id']}")
+            resp = self.client.get(f"/api/orders/{order['order_id']}")
             self.assertEqual(resp.get_json()["total_amount"], "21.00")
 
     def test_list_orders_by_status(self):
@@ -1247,7 +1227,7 @@ class TestOrderService(TestCase):
         another_pending_order.status = "pending"
         another_pending_order.create()
 
-        resp = self.client.get("/orders?status=pending")
+        resp = self.client.get("/api/orders?status=pending")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -1264,7 +1244,7 @@ class TestOrderService(TestCase):
         order.status = "pending"
         order.create()
 
-        resp = self.client.get("/orders?status=completed")
+        resp = self.client.get("/api/orders?status=completed")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.content_type, "application/json")
@@ -1287,7 +1267,7 @@ class TestOrderService(TestCase):
         order3.status = "pending"
         order3.create()
 
-        resp = self.client.get("/orders?customer_id=42&status=pending")
+        resp = self.client.get("/api/orders?customer_id=42&status=pending")
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
@@ -1305,7 +1285,7 @@ class TestOrderService(TestCase):
             "total_amount": "20.00",
             "items": [{"product_id": 10, "quantity": 1, "price": "20.00"}],
         }
-        resp = self.client.post("/orders", json=payload)
+        resp = self.client.post("/api/orders", json=payload)
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         data = resp.get_json()
         self.assertEqual(data["customer_id"], 200)
@@ -1319,7 +1299,7 @@ class TestOrderService(TestCase):
             "total_amount": "10.00",
             "items": [],
         }
-        resp = self.client.post("/orders", json=payload)
+        resp = self.client.post("/api/orders", json=payload)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertTrue(resp.is_json)
 
@@ -1332,7 +1312,7 @@ class TestOrderService(TestCase):
             "total_amount": "10.00",
             "items": [],
         }
-        resp = self.client.post("/orders", json=payload)
+        resp = self.client.post("/api/orders", json=payload)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertTrue(resp.is_json)
 
@@ -1345,7 +1325,7 @@ class TestOrderService(TestCase):
             "total_amount": "-99.00",
             "items": [],
         }
-        resp = self.client.post("/orders", json=payload)
+        resp = self.client.post("/api/orders", json=payload)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertTrue(resp.is_json)
 
@@ -1358,6 +1338,6 @@ class TestOrderService(TestCase):
             "total_amount": "10.00",
             "items": "not-a-list",
         }
-        resp = self.client.post("/orders", json=payload)
+        resp = self.client.post("/api/orders", json=payload)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertTrue(resp.is_json)

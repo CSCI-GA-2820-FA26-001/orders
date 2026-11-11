@@ -37,8 +37,11 @@ class DataValidationError(Exception):
 class PersistentBase:
     """Base class added persistent methods"""
 
-    def __init__(self):
+    def __init__(self, **kwargs):
+        super().__init__()
         self.id = None  # pylint: disable=invalid-name
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     @abstractmethod
     def serialize(self) -> dict:
