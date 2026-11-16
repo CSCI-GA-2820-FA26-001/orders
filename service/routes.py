@@ -35,12 +35,11 @@ DELETE /api/orders/{id}/items/{item_id} - Deletes an Item
 """
 
 from decimal import Decimal, InvalidOperation
-from flask import jsonify
+from flask import jsonify, render_template
 from flask import current_app as app  # Import Flask application
 from flask_restx import Api, Resource, fields, reqparse
 from service.common import status  # HTTP Status Codes
 from service.models import Order, OrderItem
-
 
 ######################################################################
 # Configure Swagger before initializing it
@@ -72,15 +71,8 @@ def health():
 ######################################################################
 @app.route("/")
 def index():
-    """Root URL response with service metadata"""
-    return (
-        jsonify(
-            name="Orders Service",
-            version="1.0",
-            list_url="/api/orders",
-        ),
-        status.HTTP_200_OK,
-    )
+    """Display the Orders administration UI"""
+    return render_template("index.html")
 
 
 # Define the models so that the docs reflect what can be sent
@@ -151,9 +143,7 @@ order_model = api.model(
         "total_amount": fields.String(
             readOnly=True, description="Sum of price * quantity for all items"
         ),
-        "items": fields.List(
-            fields.Nested(item_model), description="Order items"
-        ),
+        "items": fields.List(fields.Nested(item_model), description="Order items"),
     },
 )
 
@@ -406,9 +396,7 @@ class OrderCollection(Resource):
         order.deserialize(data)
         order.create()
 
-        location_url = api.url_for(
-            OrderResource, order_id=order.id, _external=True
-        )
+        location_url = api.url_for(OrderResource, order_id=order.id, _external=True)
         return (
             order.serialize(),
             status.HTTP_201_CREATED,
