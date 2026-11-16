@@ -28,6 +28,7 @@ from unittest.mock import patch
 
 from wsgi import app
 from service.models import Order, OrderItem, DataValidationError, db
+from service.models.persistent_base import PersistentBase
 from .factories import OrderFactory, OrderItemFactory
 
 DATABASE_URI = os.getenv(
@@ -88,6 +89,24 @@ class TestOrderModel(TestCase):
         self.assertEqual(order.order_date, order_date)
         self.assertEqual(order.status, "pending")
         self.assertEqual(order.total_amount, Decimal("59.99"))
+
+    def test_persistent_base_init_sets_kwargs(self):
+        """It should initialize PersistentBase attributes from kwargs"""
+
+        class SampleModel(PersistentBase):
+            """Concrete PersistentBase used only for constructor coverage"""
+
+            def serialize(self) -> dict:
+                return {"id": self.id}
+
+            def deserialize(self, data: dict) -> None:
+                return None
+
+        model = SampleModel(customer_id=42, status="pending")
+
+        self.assertIsNone(model.id)
+        self.assertEqual(model.customer_id, 42)
+        self.assertEqual(model.status, "pending")
 
     def test_order_default_status(self):
         """It should default a new Order status to pending"""

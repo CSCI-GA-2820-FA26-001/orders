@@ -215,6 +215,18 @@ class TestOrderService(TestCase):
         )
         self.assertTrue(resp.is_json)
 
+    def test_create_order_null_json_body(self):
+        """It should return 400 when the JSON body is null"""
+        resp = self.client.post(
+            "/api/orders",
+            data="null",
+            content_type="application/json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(resp.is_json)
+        self.assertIn("message", resp.get_json())
+
     def test_create_order_missing_items(self):
         """It should not Create an Order without items"""
         payload = {
@@ -553,6 +565,7 @@ class TestOrderService(TestCase):
 
         invalid_payloads = [
             {},
+            {"status": "pending"},
             {"customer_id": 0},
             {"customer_id": "456"},
             {"customer_id": 456, "items": []},
