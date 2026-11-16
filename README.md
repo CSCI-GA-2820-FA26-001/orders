@@ -36,27 +36,29 @@ Deleting an order also deletes its items.
 
 ### Validation
 
-Orders are validated in the model, not in the routes. `Order.deserialize()` checks the incoming data and fills in the Order and its items, and raises a `DataValidationError` for bad data, which the service returns as `400 Bad Request` with the reason in `message`. `POST /orders` uses it to create orders.
+Orders are validated in the model, not in the routes. `Order.deserialize()` checks the incoming data and fills in the Order and its items, and raises a `DataValidationError` for bad data, which the service returns as `400 Bad Request` with the reason in `message`. `POST /api/orders` uses it to create orders.
 
 The model also has query methods used by the service: `Order.find_by_order_id()` and `Order.find_by_status()`.
 
 ## API Endpoints
 
+The REST API is implemented with Flask-RESTX and lives under the `/api` prefix so it stays separate from UI routes. Interactive Swagger docs are available at `/apidocs`.
+
 | Method | URL | Description | Success |
 |--------|-----|-------------|---------|
 | `GET` | `/health` | Health check for Kubernetes | `200 OK` |
 | `GET` | `/` | Service name, version and the list URL | `200 OK` |
-| `POST` | `/orders` | Create an order, with or without items | `201 Created` |
-| `GET` | `/orders` | List all orders (optional `?customer_id=` and `?status=`) | `200 OK` |
-| `GET` | `/orders/{order_id}` | Read an order | `200 OK` |
-| `PUT` | `/orders/{order_id}` | Update an order's `customer_id` | `200 OK` |
-| `DELETE` | `/orders/{order_id}` | Delete an order and its items | `204 No Content` |
-| `PUT` | `/orders/{order_id}/cancel` | Cancel a `pending` order | `200 OK` |
-| `POST` | `/orders/{order_id}/items` | Add an item to an order | `201 Created` |
-| `GET` | `/orders/{order_id}/items` | List the items of an order | `200 OK` |
-| `GET` | `/orders/{order_id}/items/{item_id}` | Read an item of an order | `200 OK` |
-| `PUT` | `/orders/{order_id}/items/{item_id}` | Update an item of an order | `200 OK` |
-| `DELETE` | `/orders/{order_id}/items/{item_id}` | Delete an item from an order | `204 No Content` |
+| `POST` | `/api/orders` | Create an order, with or without items | `201 Created` |
+| `GET` | `/api/orders` | List all orders (optional `?customer_id=` and `?status=`) | `200 OK` |
+| `GET` | `/api/orders/{order_id}` | Read an order | `200 OK` |
+| `PUT` | `/api/orders/{order_id}` | Update an order's `customer_id` | `200 OK` |
+| `DELETE` | `/api/orders/{order_id}` | Delete an order and its items | `204 No Content` |
+| `PUT` | `/api/orders/{order_id}/cancel` | Cancel a `pending` order | `200 OK` |
+| `POST` | `/api/orders/{order_id}/items` | Add an item to an order | `201 Created` |
+| `GET` | `/api/orders/{order_id}/items` | List the items of an order | `200 OK` |
+| `GET` | `/api/orders/{order_id}/items/{item_id}` | Read an item of an order | `200 OK` |
+| `PUT` | `/api/orders/{order_id}/items/{item_id}` | Update an item of an order | `200 OK` |
+| `DELETE` | `/api/orders/{order_id}/items/{item_id}` | Delete an item from an order | `204 No Content` |
 
 Request bodies must be JSON with `Content-Type: application/json`.
 
@@ -82,14 +84,14 @@ GET /
 {
   "name": "Orders Service",
   "version": "1.0",
-  "list_url": "/orders"
+  "list_url": "/api/orders"
 }
 ```
 
 ### Create an order
 
 ```
-POST /orders
+POST /api/orders
 ```
 
 | Input | Required | Description |
@@ -100,10 +102,10 @@ POST /orders
 | `order_date` | no | ISO 8601 date and time. Defaults to now |
 | `total_amount` | no | Overrides the calculated total. Normally left out so the service calculates it from the items |
 
-The response is the new order with a `Location` header that holds the full URL of the order, generated with Flask `url_for()`, for example `Location: http://localhost:8080/orders/1`.
+The response is the new order with a `Location` header that holds the full URL of the order, generated with Flask `url_for()`, for example `Location: http://localhost:8080/api/orders/1`.
 
 ```bash
-curl -i -X POST http://localhost:8080/orders \
+curl -i -X POST http://localhost:8080/api/orders \
   -H "Content-Type: application/json" \
   -d '{"customer_id": 42, "items": [{"product_id": 1001, "quantity": 2, "price": "10.50"}, {"product_id": 1002, "quantity": 1, "price": "5.00"}]}'
 ```
@@ -122,10 +124,10 @@ curl -i -X POST http://localhost:8080/orders \
 }
 ```
 
-An order can be created without items and filled later with `POST /orders/{order_id}/items`:
+An order can be created without items and filled later with `POST /api/orders/{order_id}/items`:
 
 ```bash
-curl -i -X POST http://localhost:8080/orders \
+curl -i -X POST http://localhost:8080/api/orders \
   -H "Content-Type: application/json" \
   -d '{"customer_id": 42}'
 ```
@@ -146,10 +148,10 @@ Returns `400 Bad Request` if the body is missing, `customer_id` is missing or no
 ### List and query orders
 
 ```
-GET /orders
-GET /orders?customer_id=42
-GET /orders?status=pending
-GET /orders?customer_id=42&status=pending
+GET /api/orders
+GET /api/orders?customer_id=42
+GET /api/orders?status=pending
+GET /api/orders?customer_id=42&status=pending
 ```
 
 Without query parameters, the service returns every order. A `customer_id` is not required.
@@ -164,9 +166,9 @@ The parameters can be combined, and an order must match all of them. The respons
 ### Read, update and delete an order
 
 ```
-GET    /orders/{order_id}
-PUT    /orders/{order_id}
-DELETE /orders/{order_id}
+GET    /api/orders/{order_id}
+PUT    /api/orders/{order_id}
+DELETE /api/orders/{order_id}
 ```
 
 `PUT` takes a body with a positive integer `customer_id`:
@@ -184,7 +186,7 @@ Only `customer_id` is updated. Items are not changed through this endpoint, so a
 ### Cancel an order
 
 ```
-PUT /orders/{order_id}/cancel
+PUT /api/orders/{order_id}/cancel
 ```
 
 Cancelling is an action on an order, not an update of its fields, so it has its own URL and takes no body. Only a `pending` order can be cancelled.
@@ -196,13 +198,13 @@ Cancelling is an action on an order, not an update of its fields, so it has its 
 | Does not exist | `404 Not Found` |
 
 ```bash
-curl -X PUT http://localhost:8080/orders/1/cancel
+curl -X PUT http://localhost:8080/api/orders/1/cancel
 ```
 
 ### Add an item to an order
 
 ```
-POST /orders/{order_id}/items
+POST /api/orders/{order_id}/items
 ```
 
 | Input | Required | Description |
@@ -216,10 +218,10 @@ Returns `201 Created` with the new item and a `Location` header with the full UR
 ### List, read, update and delete an item
 
 ```
-GET    /orders/{order_id}/items
-GET    /orders/{order_id}/items/{item_id}
-PUT    /orders/{order_id}/items/{item_id}
-DELETE /orders/{order_id}/items/{item_id}
+GET    /api/orders/{order_id}/items
+GET    /api/orders/{order_id}/items/{item_id}
+PUT    /api/orders/{order_id}/items/{item_id}
+DELETE /api/orders/{order_id}/items/{item_id}
 ```
 
 - `GET .../items` returns the items of the order, or an empty list if it has none.
@@ -380,7 +382,7 @@ The Orders service creates its tables on start up.
 
    ```bash
    curl http://localhost:8080/health
-   curl http://localhost:8080/orders
+   curl http://localhost:8080/api/orders
    ```
 
 To delete the cluster, run `make cluster-rm`.
