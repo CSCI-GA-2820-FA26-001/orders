@@ -50,7 +50,51 @@
                 <button id="delete-order-btn" type="button">
                     Delete Order
                 </button>
+
+                <button id="cancel-order-btn" type="button">
+                    Cancel Order
+                </button>
             </div>
+
+            <div id="query-orders-section">
+                <h3>Query Orders by Status</h3>
+
+                <label for="status-filter">Status</label>
+
+                <select id="status-filter" name="status-filter">
+                    <option value="">All</option>
+                    <option value="pending">pending</option>
+                    <option value="processing">processing</option>
+                    <option value="shipped">shipped</option>
+                    <option value="delivered">delivered</option>
+                    <option value="cancelled">cancelled</option>
+                </select>
+
+                <button id="search-orders-btn" type="button">
+                    Search Orders
+                </button>
+            </div>
+        </section>
+
+        <section id="search-results">
+            <h2>Search Results</h2>
+
+            <p id="search-message">
+                Select a status and click Search Orders.
+            </p>
+
+            <table id="search-results-table">
+                <thead>
+                    <tr>
+                        <th>Order ID</th>
+                        <th>Customer ID</th>
+                        <th>Status</th>
+                        <th>Order Date</th>
+                        <th>Total Amount</th>
+                    </tr>
+                </thead>
+                <tbody id="search-results-body"></tbody>
+            </table>
         </section>
 
         <section id="order-results">
