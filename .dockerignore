@@ -1,6 +1,10 @@
 .git
 .github
-.devcontainer
+
+.devcontainer/*
+!.devcontainer/scripts/
+.devcontainer/scripts/*
+!.devcontainer/scripts/install-tools.sh
 .pytest_cache
 .coverage
 .env
@@ -8,4 +12,5 @@
 **/*.pyc
 tests
 k8s
-config
+config/*
+!config/insecure-registry.json

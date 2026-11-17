@@ -74,14 +74,12 @@ class TestOrderService(TestCase):
     ######################################################################
 
     def test_index(self):
-        """It should return service metadata at the root URL"""
+        """It should return the Orders administration UI at the root URL"""
         resp = self.client.get("/")
+
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(resp.content_type, "application/json")
-        data = resp.get_json()
-        self.assertEqual(data["name"], "Orders Service")
-        self.assertEqual(data["version"], "1.0")
-        self.assertEqual(data["list_url"], "/api/orders")
+        self.assertTrue(resp.content_type.startswith("text/html"))
+        self.assertIn(b"Orders Service Administration", resp.data)
 
     def test_health(self):
         """It should report that the service is healthy"""
@@ -1043,7 +1041,9 @@ class TestOrderService(TestCase):
         self.assertTrue(resp.is_json)
 
         # The Item and both totals are unchanged
-        resp = self.client.get(f"/api/orders/{order_b['order_id']}/items/{item_b['id']}")
+        resp = self.client.get(
+            f"/api/orders/{order_b['order_id']}/items/{item_b['id']}"
+        )
         self.assertEqual(resp.get_json(), item_b)
 
         for order in (order_a, order_b):
@@ -1208,7 +1208,9 @@ class TestOrderService(TestCase):
         order_b = self.client.post("/api/orders", json=payload).get_json()
         item_b_id = order_b["items"][0]["id"]
 
-        resp = self.client.delete(f"/api/orders/{order_a['order_id']}/items/{item_b_id}")
+        resp = self.client.delete(
+            f"/api/orders/{order_a['order_id']}/items/{item_b_id}"
+        )
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertTrue(resp.is_json)
 

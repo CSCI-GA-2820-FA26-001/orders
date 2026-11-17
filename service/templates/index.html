@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Orders Service Administration</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+</head>
+
+<body>
+
+    <header>
+        <h1 id="page-title">Orders Service Administration</h1>
+        <p>
+            Manage and review customer orders from the Orders Service.
+        </p>
+    </header>
+
+    <main>
+        <section id="orders-admin">
+            <h2>Order Administration</h2>
+
+            <p>
+                Use this administration interface to create, retrieve,
+                update, delete, query, and cancel orders.
+            </p>
+        </section>
+
+        <section id="order-results">
+            <h2>Order Results</h2>
+
+            <p id="results-message">
+                Order information will appear here.
+            </p>
+        </section>
+    </main>
+
+</body>
+</html>

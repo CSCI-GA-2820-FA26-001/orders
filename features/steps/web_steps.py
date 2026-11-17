@@ -12,9 +12,10 @@ def visit_home_page(context):
     context.browser.get(base_url)
 
 
-@then("the home page shows the service name")
-def verify_home_page(context):
-    body = WebDriverWait(context.browser, 10).until(
-        EC.presence_of_element_located((By.TAG_NAME, "body"))
+@then("I should see the Orders administration page")
+def verify_admin_home_page(context):
+    heading = WebDriverWait(context.browser, 10).until(
+        EC.presence_of_element_located((By.ID, "page-title"))
     )
-    assert "Orders Service" in body.text
+
+    assert heading.text == "Orders Service Administration"
