@@ -42,7 +42,7 @@ The model also has query methods used by the service: `Order.find_by_order_id()`
 
 ## API Endpoints
 
-The REST API is implemented with Flask-RESTX and lives under the `/api` prefix so it stays separate from UI routes. Interactive Swagger docs are available at `/apidocs`.
+The REST API is implemented with Flask-RESTX and lives under the `/api` prefix so it stays separate from UI routes. Interactive Swagger docs are available at `/apidocs/`.
 
 | Method | URL | Description | Success |
 |--------|-----|-------------|---------|
