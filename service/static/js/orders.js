@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     const orderIdInput = document.getElementById("order-id");
     const retrieveButton = document.getElementById("retrieve-order-btn");
+    const deleteButton = document.getElementById("delete-order-btn");
 
     const resultsMessage = document.getElementById("results-message");
     const orderDetails = document.getElementById("order-details");
@@ -11,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const resultOrderDate = document.getElementById("result-order-date");
     const resultTotalAmount = document.getElementById("result-total-amount");
     const orderItems = document.getElementById("order-items");
+
 
     retrieveButton.addEventListener("click", async () => {
         const orderId = orderIdInput.value.trim();
@@ -62,6 +64,33 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             orderDetails.hidden = true;
             resultsMessage.textContent = "Unable to retrieve the order.";
+        }
+    });
+
+    deleteButton.addEventListener("click", async () => {
+        const orderId = orderIdInput.value.trim();
+
+        if (!orderId) {
+            resultsMessage.textContent = "Please enter an Order ID.";
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/orders/${orderId}`, {
+                method: "DELETE",
+            });
+
+            if (!response.ok) {
+                resultsMessage.textContent = "Unable to delete the order.";
+                return;
+            }
+
+            orderDetails.hidden = true;
+            resultsMessage.textContent =
+                `Order ${orderId} deleted successfully.`;
+            orderIdInput.value = "";
+        } catch (error) {
+            resultsMessage.textContent = "Unable to delete the order.";
         }
     });
 });
