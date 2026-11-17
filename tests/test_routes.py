@@ -110,8 +110,98 @@ class TestOrderService(TestCase):
         self.assertEqual(spec["basePath"], "/api")
         self.assertIn("/orders", spec["paths"])
         self.assertIn("/orders/{order_id}/cancel", spec["paths"])
-        self.assertIn("OrderModel", spec["definitions"])
-        self.assertIn("OrderItemModel", spec["definitions"])
+        self.assertIn("Order", spec["definitions"])
+        self.assertIn("OrderItem", spec["definitions"])
+
+    def get_swagger_spec(self):
+        """Fetch the published Swagger specification"""
+        resp = self.client.get("/api/swagger.json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        return resp.get_json()
+
+    def test_swagger_documents_data_models(self):
+        """It should document the Order and Order Item models and their required fields"""
+        definitions = self.get_swagger_spec()["definitions"]
+        for name in (
+            "Order",
+            "OrderItem",
+            "OrderCreate",
+            "OrderItemCreate",
+            "OrderUpdate",
+            "Error",
+        ):
+            self.assertIn(name, definitions)
+
+        self.assertEqual(definitions["OrderCreate"]["required"], ["customer_id"])
+        self.assertEqual(definitions["OrderUpdate"]["required"], ["customer_id"])
+        self.assertCountEqual(
+            definitions["OrderItemCreate"]["required"],
+            ["product_id", "quantity", "price"],
+        )
+        self.assertEqual(definitions["Error"]["required"], ["message"])
+        # items and status are optional when creating an Order
+        self.assertNotIn("items", definitions["OrderCreate"]["required"])
+        self.assertNotIn("status", definitions["OrderCreate"]["required"])
+        # every field is described and shows an example of what to send
+        for name in ("OrderCreate", "OrderItemCreate", "OrderUpdate"):
+            for field, details in definitions[name]["properties"].items():
+                self.assertIn("description", details, f"{name}.{field}")
+        self.assertIn("example", definitions["OrderItemCreate"]["properties"]["price"])
+
+    def test_swagger_documents_request_payloads(self):
+        """It should document the request model of every operation that takes a body"""
+        paths = self.get_swagger_spec()["paths"]
+        expected = {
+            ("/orders", "post"): "OrderCreate",
+            ("/orders/{order_id}", "put"): "OrderUpdate",
+            ("/orders/{order_id}/items", "post"): "OrderItemCreate",
+            ("/orders/{order_id}/items/{item_id}", "put"): "OrderItemCreate",
+        }
+        for (path, method), model in expected.items():
+            body = [
+                param
+                for param in paths[path][method]["parameters"]
+                if param["in"] == "body"
+            ]
+            self.assertEqual(len(body), 1, f"{method} {path}")
+            self.assertEqual(
+                body[0]["schema"]["$ref"], f"#/definitions/{model}", f"{method} {path}"
+            )
+
+    def test_swagger_documents_responses(self):
+        """It should document the success and error responses of every operation"""
+        paths = self.get_swagger_spec()["paths"]
+
+        # status codes that are not obvious from the HTTP method
+        self.assertIn("400", paths["/orders"]["get"]["responses"])
+        self.assertIn("409", paths["/orders/{order_id}/cancel"]["put"]["responses"])
+        self.assertIn("201", paths["/orders"]["post"]["responses"])
+        self.assertIn("204", paths["/orders/{order_id}"]["delete"]["responses"])
+
+        # success payloads use the Order and Order Item models
+        self.assertEqual(
+            paths["/orders/{order_id}"]["get"]["responses"]["200"]["schema"]["$ref"],
+            "#/definitions/Order",
+        )
+        self.assertEqual(
+            paths["/orders/{order_id}/items/{item_id}"]["get"]["responses"]["200"][
+                "schema"
+            ]["$ref"],
+            "#/definitions/OrderItem",
+        )
+
+        # every error response points at the Error model
+        for path, operations in paths.items():
+            for method, operation in operations.items():
+                if method == "parameters":
+                    continue
+                for code, response in operation["responses"].items():
+                    if code.startswith("4"):
+                        self.assertEqual(
+                            response["schema"]["$ref"],
+                            "#/definitions/Error",
+                            f"{method} {path} {code}",
+                        )
 
     def test_bad_request(self):
         """It should return JSON 400 Bad Request for invalid create data"""

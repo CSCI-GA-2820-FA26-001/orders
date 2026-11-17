@@ -75,24 +75,44 @@ def index():
     return render_template("index.html")
 
 
-# Define the models so that the docs reflect what can be sent
+# Define the models so that the docs reflect what can be sent and returned
+error_model = api.model(
+    "Error",
+    {
+        "message": fields.String(
+            required=True, description="What went wrong with the request"
+        ),
+        "error": fields.String(
+            description="The HTTP reason phrase (not on every error)",
+            example="Bad Request",
+        ),
+        "status_code": fields.Integer(
+            description="The HTTP status code (not on every error)", example=400
+        ),
+    },
+)
+
 create_item_model = api.model(
     "OrderItemCreate",
     {
         "product_id": fields.Integer(
-            required=True, description="The product identifier"
+            required=True, description="The product identifier", example=1001
         ),
         "quantity": fields.Integer(
-            required=True, description="How many of the product were ordered"
+            required=True,
+            description="How many of the product were ordered",
+            example=2,
         ),
         "price": fields.String(
-            required=True, description="Unit price as a decimal string"
+            required=True,
+            description="Unit price as a decimal string",
+            example="10.50",
         ),
     },
 )
 
 item_model = api.inherit(
-    "OrderItemModel",
+    "OrderItem",
     create_item_model,
     {
         "id": fields.Integer(
@@ -105,17 +125,21 @@ item_model = api.inherit(
 )
 
 create_model = api.model(
-    "Order",
+    "OrderCreate",
     {
         "customer_id": fields.Integer(
-            required=True, description="The customer that placed the order"
+            required=True,
+            description="The customer that placed the order",
+            example=42,
         ),
         "status": fields.String(
-            description="Order status",
-            enum=list(Order.VALID_STATUSES),
+            description="Order status; defaults to pending when omitted",
+            enum=sorted(Order.VALID_STATUSES),
+            example="pending",
         ),
         "order_date": fields.String(
-            description="ISO 8601 order date; defaults to now when omitted"
+            description="ISO 8601 order date; defaults to now when omitted",
+            example="2026-11-17T10:30:00",
         ),
         "items": fields.List(
             fields.Nested(create_item_model),
@@ -125,7 +149,7 @@ create_model = api.model(
 )
 
 order_model = api.model(
-    "OrderModel",
+    "Order",
     {
         "order_id": fields.Integer(
             readOnly=True, description="The unique id assigned to the Order"
@@ -135,11 +159,9 @@ order_model = api.model(
         ),
         "status": fields.String(
             description="Order status",
-            enum=list(Order.VALID_STATUSES),
+            enum=sorted(Order.VALID_STATUSES),
         ),
-        "order_date": fields.String(
-            description="ISO 8601 order date; defaults to now when omitted"
-        ),
+        "order_date": fields.String(description="ISO 8601 date the order was placed"),
         "total_amount": fields.String(
             readOnly=True, description="Sum of price * quantity for all items"
         ),
@@ -151,7 +173,7 @@ update_order_model = api.model(
     "OrderUpdate",
     {
         "customer_id": fields.Integer(
-            required=True, description="Updated customer identifier"
+            required=True, description="Updated customer identifier", example=43
         ),
     },
 )
@@ -170,7 +192,7 @@ order_args.add_argument(
     type=str,
     location="args",
     required=False,
-    help="List Orders by status",
+    help="List Orders by status: " + ", ".join(sorted(Order.VALID_STATUSES)),
 )
 
 
@@ -237,7 +259,7 @@ class OrderResource(Resource):
     # RETRIEVE AN ORDER
     # ------------------------------------------------------------------
     @api.doc("get_orders")
-    @api.response(404, "Order not found")
+    @api.response(404, "Order not found", error_model)
     @api.marshal_with(order_model)
     def get(self, order_id):
         """Retrieve a single Order"""
@@ -256,8 +278,8 @@ class OrderResource(Resource):
     # UPDATE AN EXISTING ORDER
     # ------------------------------------------------------------------
     @api.doc("update_orders")
-    @api.response(404, "Order not found")
-    @api.response(400, "The posted Order data was not valid")
+    @api.response(404, "Order not found", error_model)
+    @api.response(400, "The posted Order data was not valid", error_model)
     @api.expect(update_order_model)
     @api.marshal_with(order_model)
     def put(self, order_id):
@@ -343,6 +365,7 @@ class OrderCollection(Resource):
     # LIST ALL ORDERS
     # ------------------------------------------------------------------
     @api.doc("list_orders")
+    @api.response(400, "customer_id must be an integer", error_model)
     @api.expect(order_args, validate=True)
     @api.marshal_list_with(order_model)
     def get(self):
@@ -378,7 +401,7 @@ class OrderCollection(Resource):
     # ADD A NEW ORDER
     # ------------------------------------------------------------------
     @api.doc("create_orders")
-    @api.response(400, "The posted data was not valid")
+    @api.response(400, "The posted data was not valid", error_model)
     @api.expect(create_model)
     @api.marshal_with(order_model, code=201)
     def post(self):
@@ -413,8 +436,8 @@ class CancelResource(Resource):  # pylint: disable=too-few-public-methods
     """Cancel actions on an Order"""
 
     @api.doc("cancel_orders")
-    @api.response(404, "Order not found")
-    @api.response(409, "The Order cannot be cancelled")
+    @api.response(404, "Order not found", error_model)
+    @api.response(409, "The Order cannot be cancelled", error_model)
     @api.marshal_with(order_model)
     def put(self, order_id):
         """
@@ -456,7 +479,7 @@ class OrderItemCollection(Resource):
     # LIST ITEMS IN AN ORDER
     # ------------------------------------------------------------------
     @api.doc("list_order_items")
-    @api.response(404, "Order not found")
+    @api.response(404, "Order not found", error_model)
     @api.marshal_list_with(item_model)
     def get(self, order_id):
         """List all Items in an Order"""
@@ -476,8 +499,8 @@ class OrderItemCollection(Resource):
     # ADD AN ITEM TO AN ORDER
     # ------------------------------------------------------------------
     @api.doc("create_order_items")
-    @api.response(404, "Order not found")
-    @api.response(400, "The posted Item data was not valid")
+    @api.response(404, "Order not found", error_model)
+    @api.response(400, "The posted Item data was not valid", error_model)
     @api.expect(create_item_model)
     @api.marshal_with(item_model, code=201)
     def post(self, order_id):
@@ -537,7 +560,7 @@ class OrderItemResource(Resource):
     # RETRIEVE AN ITEM
     # ------------------------------------------------------------------
     @api.doc("get_order_items")
-    @api.response(404, "Item not found")
+    @api.response(404, "Item not found", error_model)
     @api.marshal_with(item_model)
     def get(self, order_id, item_id):
         """Retrieve a single Item from an Order"""
@@ -567,8 +590,8 @@ class OrderItemResource(Resource):
     # UPDATE AN ITEM
     # ------------------------------------------------------------------
     @api.doc("update_order_items")
-    @api.response(404, "Item not found")
-    @api.response(400, "The posted Item data was not valid")
+    @api.response(404, "Item not found", error_model)
+    @api.response(400, "The posted Item data was not valid", error_model)
     @api.expect(create_item_model)
     @api.marshal_with(item_model)
     def put(self, order_id, item_id):
@@ -613,7 +636,7 @@ class OrderItemResource(Resource):
     # ------------------------------------------------------------------
     @api.doc("delete_order_items")
     @api.response(204, "Item deleted")
-    @api.response(404, "Item not found")
+    @api.response(404, "Item not found", error_model)
     def delete(self, order_id, item_id):
         """Delete an Item from an Order"""
         app.logger.info(
