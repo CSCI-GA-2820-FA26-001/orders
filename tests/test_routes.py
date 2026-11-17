@@ -225,6 +225,19 @@ class TestOrderService(TestCase):
         self.assertTrue(resp.is_json)
         self.assertIn("message", resp.get_json())
 
+    def test_create_order_malformed_json(self):
+        """Malformed JSON should return a JSON 4xx response, not a 500."""
+        resp = self.client.post(
+            "/api/orders",
+            data='{"customer_id":',
+            content_type="application/json",
+        )
+
+        self.assertGreaterEqual(resp.status_code, 400)
+        self.assertLess(resp.status_code, 500)
+        self.assertTrue(resp.is_json)
+        self.assertIn("message", resp.get_json())
+
     def test_create_order_missing_items(self):
         """It should not Create an Order without items"""
         payload = {
