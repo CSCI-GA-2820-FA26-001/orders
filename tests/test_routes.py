@@ -88,6 +88,31 @@ class TestOrderService(TestCase):
         self.assertEqual(resp.content_type, "application/json")
         self.assertEqual(resp.get_json(), {"status": "OK"})
 
+    def test_swagger_docs_page(self):
+        """It should serve the Swagger UI at /apidocs/"""
+        resp = self.client.get("/apidocs/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("text/html", resp.content_type)
+
+    def test_swagger_docs_page_without_trailing_slash(self):
+        """It should send /apidocs to /apidocs/"""
+        resp = self.client.get("/apidocs")
+        self.assertIn(resp.status_code, (status.HTTP_200_OK, 301, 308))
+        if resp.status_code != status.HTTP_200_OK:
+            self.assertTrue(resp.headers["Location"].endswith("/apidocs/"))
+
+    def test_swagger_specification(self):
+        """It should publish the Swagger specification with the data models"""
+        resp = self.client.get("/api/swagger.json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        spec = resp.get_json()
+        self.assertEqual(spec["info"]["title"], "Orders REST API Service")
+        self.assertEqual(spec["basePath"], "/api")
+        self.assertIn("/orders", spec["paths"])
+        self.assertIn("/orders/{order_id}/cancel", spec["paths"])
+        self.assertIn("OrderModel", spec["definitions"])
+        self.assertIn("OrderItemModel", spec["definitions"])
+
     def test_bad_request(self):
         """It should return JSON 400 Bad Request for invalid create data"""
         resp = self.client.post("/api/orders", json={})

@@ -51,7 +51,7 @@ api = Api(
     description="This is an Orders microservice for an eCommerce back end.",
     default="orders",
     default_label="Order operations",
-    doc="/apidocs",
+    doc="/apidocs/",
     prefix="/api",
     catch_all_404s=True,
 )
