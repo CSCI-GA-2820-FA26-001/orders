@@ -27,6 +27,7 @@ def load_orders(context):
         response = requests.delete(f"{rest_endpoint}/{order['order_id']}", timeout=WAIT_TIMEOUT)
         assert response.status_code == HTTP_204_NO_CONTENT
 
+    context.orders = []
     for row in context.table:
         payload = {
             "customer_id": int(row["customer_id"]),
@@ -35,3 +36,4 @@ def load_orders(context):
         }
         response = requests.post(rest_endpoint, json=payload, timeout=WAIT_TIMEOUT)
         assert response.status_code == HTTP_201_CREATED
+        context.orders.append(response.json())

@@ -93,6 +93,57 @@ document.addEventListener("DOMContentLoaded", () => {
             resultsMessage.textContent = "Unable to delete the order.";
         }
     });
+    const cancelButton = document.getElementById("cancel-order-btn");
+
+    cancelButton.addEventListener("click", async () => {
+        const orderId = orderIdInput.value.trim();
+
+        if (!orderId) {
+            resultsMessage.textContent = "Please enter an Order ID.";
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/orders/${orderId}/cancel`, {
+                method: "PUT",
+            });
+
+            if (!response.ok) {
+                let message = "Unable to cancel the order.";
+
+                if (response.status === 404) {
+                    message = `Order ${orderId} was not found.`;
+                } else {
+                    try {
+                        const error = await response.json();
+                        if (error.message) {
+                            message = error.message;
+                        }
+                    } catch (parseError) {
+                        // Keep the default message when the body is not JSON
+                    }
+                }
+
+                resultsMessage.textContent = message;
+                return;
+            }
+
+            const order = await response.json();
+
+            resultOrderId.textContent = order.order_id;
+            resultCustomerId.textContent = order.customer_id;
+            resultStatus.textContent = order.status;
+            resultOrderDate.textContent = order.order_date;
+            resultTotalAmount.textContent = order.total_amount;
+
+            orderDetails.hidden = false;
+            resultsMessage.textContent =
+                `Order ${orderId} cancelled successfully.`;
+        } catch (error) {
+            resultsMessage.textContent = "Unable to cancel the order.";
+        }
+    });
+
     const statusFilter = document.getElementById("status-filter");
     const searchButton = document.getElementById("search-orders-btn");
     const searchMessage = document.getElementById("search-message");
