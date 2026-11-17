@@ -22,3 +22,15 @@ h1,
 h2 {
     margin-top: 0;
 }
+
+#search-results-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#search-results-table th,
+#search-results-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #ddd;
+    text-align: left;
+}

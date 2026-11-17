@@ -93,4 +93,52 @@ document.addEventListener("DOMContentLoaded", () => {
             resultsMessage.textContent = "Unable to delete the order.";
         }
     });
+    const statusFilter = document.getElementById("status-filter");
+    const searchButton = document.getElementById("search-orders-btn");
+    const searchMessage = document.getElementById("search-message");
+    const searchResultsBody = document.getElementById("search-results-body");
+
+    searchButton.addEventListener("click", async () => {
+        const selectedStatus = statusFilter.value;
+        const url = selectedStatus
+            ? `/api/orders?status=${encodeURIComponent(selectedStatus)}`
+            : "/api/orders";
+
+        searchResultsBody.innerHTML = "";
+
+        try {
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                searchMessage.textContent = "Unable to search orders.";
+                return;
+            }
+
+            const orders = await response.json();
+
+            orders.forEach((order) => {
+                const row = document.createElement("tr");
+
+                [
+                    order.order_id,
+                    order.customer_id,
+                    order.status,
+                    order.order_date,
+                    order.total_amount,
+                ].forEach((value) => {
+                    const cell = document.createElement("td");
+                    cell.textContent = value;
+                    row.appendChild(cell);
+                });
+
+                searchResultsBody.appendChild(row);
+            });
+
+            searchMessage.textContent = orders.length
+                ? `${orders.length} order(s) found.`
+                : "No orders found.";
+        } catch (error) {
+            searchMessage.textContent = "Unable to search orders.";
+        }
+    });
 });

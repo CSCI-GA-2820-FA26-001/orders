@@ -3,7 +3,7 @@ import os
 from behave import then, when
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import Select, WebDriverWait
 
 
 @when("I visit the home page")
@@ -53,3 +53,47 @@ def verify_message(context, message):
     )
 
     assert results_message.text == message
+
+
+@when('I select "{value}" in the Status filter')
+def select_status_filter(context, value):
+    """Select a value in the Status filter dropdown"""
+    status_filter = WebDriverWait(context.browser, 10).until(
+        EC.presence_of_element_located((By.ID, "status-filter"))
+    )
+    Select(status_filter).select_by_value(value)
+
+
+@when("I click the Search Orders button")
+def click_search_orders(context):
+    """Click the Search Orders button"""
+    search_button = WebDriverWait(context.browser, 10).until(
+        EC.element_to_be_clickable((By.ID, "search-orders-btn"))
+    )
+    search_button.click()
+
+
+@then('I should see the search message "{message}"')
+def verify_search_message(context, message):
+    """Check the search results message"""
+    WebDriverWait(context.browser, 10).until(
+        EC.text_to_be_present_in_element((By.ID, "search-message"), message)
+    )
+    search_message = context.browser.find_element(By.ID, "search-message")
+    assert search_message.text == message
+
+
+@then("I should see {count:d} orders in the search results")
+def verify_search_result_count(context, count):
+    """Check how many orders appear in the search results"""
+    rows = context.browser.find_elements(By.CSS_SELECTOR, "#search-results-body tr")
+    assert len(rows) == count, f"Expected {count} rows, found {len(rows)}"
+
+
+@then('I should only see orders with status "{order_status}" in the search results')
+def verify_search_result_status(context, order_status):
+    """Check that every search result has the given status"""
+    cells = context.browser.find_elements(By.CSS_SELECTOR, "#search-results-body tr td:nth-child(3)")
+    assert cells, "Expected at least one order in the search results"
+    for cell in cells:
+        assert cell.text == order_status, f"Found order with status '{cell.text}'"
