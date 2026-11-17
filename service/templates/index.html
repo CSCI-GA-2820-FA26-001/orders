@@ -29,16 +29,68 @@
                 Use this administration interface to create, retrieve,
                 update, delete, query, and cancel orders.
             </p>
+
+            <div id="read-order-section">
+                <h3>Retrieve an Order</h3>
+
+                <label for="order-id">Order ID</label>
+
+                <input
+                    type="number"
+                    id="order-id"
+                    name="order-id"
+                    min="1"
+                    placeholder="Enter order ID"
+                >
+
+                <button id="retrieve-order-btn" type="button">
+                    Retrieve Order
+                </button>
+            </div>
         </section>
 
         <section id="order-results">
             <h2>Order Results</h2>
 
             <p id="results-message">
-                Order information will appear here.
+                Enter an Order ID and click Retrieve Order.
             </p>
+
+            <div id="order-details" hidden>
+                <p>
+                    <strong>Order ID:</strong>
+                    <span id="result-order-id"></span>
+                </p>
+
+                <p>
+                    <strong>Customer ID:</strong>
+                    <span id="result-customer-id"></span>
+                </p>
+
+                <p>
+                    <strong>Status:</strong>
+                    <span id="result-status"></span>
+                </p>
+
+                <p>
+                    <strong>Order Date:</strong>
+                    <span id="result-order-date"></span>
+                </p>
+
+                <p>
+                    <strong>Total Amount:</strong>
+                    <span id="result-total-amount"></span>
+                </p>
+
+                    <div id="order-items-section">
+                    <h3>Items</h3>
+                    <div id="order-items"></div>
+                </div>
+            </div>
         </section>
     </main>
+
+    <script src="{{ url_for('static', filename='js/orders.js') }}"></script>
 
 </body>
 </html>
